@@ -1,0 +1,285 @@
+// Prisma schema for StreamFlix streaming platform
+// Supports PostgreSQL with Prisma Client
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum MediaType {
+  MOVIE
+  TV_SHOW
+}
+
+enum MaturityRating {
+  G
+  PG
+  PG13
+  R
+  NC17
+  TV_Y
+  TV_Y7
+  TV_G
+  TV_PG
+  TV_14
+  TV_MA
+}
+
+enum QualityLevel {
+  SD
+  HD
+  FHD
+  UHD_4K
+}
+
+model User {
+  id            String          @id @default(cuid())
+  email         String          @unique
+  name          String?
+  avatar        String?         @default("https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&h=200&q=80")
+  role          String          @default("user") // "user" | "admin"
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  profiles      UserProfile[]
+  watchlists    Watchlist[]
+  watchHistory  WatchHistory[]
+  progresses    ViewingProgress[]
+  ratings       Rating[]
+
+  @@map("users")
+}
+
+model UserProfile {
+  id            String          @id @default(cuid())
+  userId        String
+  name          String
+  avatar        String
+  isKids        Boolean         @default(false)
+  preferredLang String          @default("en")
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime        @default(now())
+
+  watchlists    Watchlist[]
+  watchHistory  WatchHistory[]
+  progresses    ViewingProgress[]
+
+  @@map("user_profiles")
+}
+
+model Genre {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  slug        String       @unique
+  movies      MovieGenre[]
+  tvShows     TVShowGenre[]
+
+  @@map("genres")
+}
+
+model Movie {
+  id             String          @id @default(cuid())
+  title          String
+  slug           String          @unique
+  synopsis       String          @db.Text
+  releaseYear    Int
+  maturityRating MaturityRating  @default(PG13)
+  duration       Int             // duration in minutes
+  quality        QualityLevel    @default(UHD_4K)
+  ratingScore    Float           @default(8.5) // out of 10
+  posterUrl      String
+  backdropUrl    String
+  logoUrl        String?
+  videoUrl       String          // streaming source URL
+  trailerUrl     String?         // preview snippet / trailer
+  director       String
+  cast           String[]        // array of cast members
+  audioLanguages String[]        @default(["English", "Spanish", "French", "Japanese"])
+  subtitles      String[]        @default(["English", "Spanish", "French", "German", "Japanese"])
+  featured       Boolean         @default(false)
+  trendingScore  Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  genres         MovieGenre[]
+  watchlists     Watchlist[]
+  watchHistory   WatchHistory[]
+  progresses     ViewingProgress[]
+  ratings        Rating[]
+
+  @@index([releaseYear])
+  @@index([trendingScore])
+  @@map("movies")
+}
+
+model TVShow {
+  id             String          @id @default(cuid())
+  title          String
+  slug           String          @unique
+  synopsis       String          @db.Text
+  releaseYear    Int
+  maturityRating MaturityRating  @default(TV_MA)
+  quality        QualityLevel    @default(UHD_4K)
+  ratingScore    Float           @default(8.8)
+  posterUrl      String
+  backdropUrl    String
+  logoUrl        String?
+  trailerUrl     String?
+  creator        String
+  cast           String[]
+  audioLanguages String[]        @default(["English", "Spanish", "French", "Japanese"])
+  subtitles      String[]        @default(["English", "Spanish", "French", "German", "Japanese"])
+  featured       Boolean         @default(false)
+  trendingScore  Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  genres         TVShowGenre[]
+  seasons        Season[]
+  watchlists     Watchlist[]
+  watchHistory   WatchHistory[]
+  progresses     ViewingProgress[]
+  ratings        Rating[]
+
+  @@index([releaseYear])
+  @@index([trendingScore])
+  @@map("tv_shows")
+}
+
+model Season {
+  id          String     @id @default(cuid())
+  tvShowId    String
+  seasonNumber Int
+  title       String
+  synopsis    String?    @db.Text
+  posterUrl   String?
+  tvShow      TVShow     @relation(fields: [tvShowId], references: [id], onDelete: Cascade)
+  episodes    Episode[]
+
+  @@unique([tvShowId, seasonNumber])
+  @@map("seasons")
+}
+
+model Episode {
+  id            String            @id @default(cuid())
+  seasonId      String
+  episodeNumber Int
+  title         String
+  synopsis      String            @db.Text
+  duration      Int               // duration in minutes
+  thumbnailUrl  String
+  videoUrl      String
+  season        Season            @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  progresses    ViewingProgress[]
+  watchHistory  WatchHistory[]
+
+  @@unique([seasonId, episodeNumber])
+  @@map("episodes")
+}
+
+model MovieGenre {
+  movieId String
+  genreId String
+  movie   Movie  @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([movieId, genreId])
+  @@map("movie_genres")
+}
+
+model TVShowGenre {
+  tvShowId String
+  genreId  String
+  tvShow   TVShow @relation(fields: [tvShowId], references: [id], onDelete: Cascade)
+  genre    Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([tvShowId, genreId])
+  @@map("tv_show_genres")
+}
+
+model Watchlist {
+  id        String       @id @default(cuid())
+  userId    String
+  profileId String?
+  movieId   String?
+  tvShowId  String?
+  addedAt   DateTime     @default(now())
+
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile   UserProfile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  movie     Movie?       @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  tvShow    TVShow?      @relation(fields: [tvShowId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, movieId])
+  @@unique([userId, tvShowId])
+  @@index([userId])
+  @@map("watchlists")
+}
+
+model ViewingProgress {
+  id             String       @id @default(cuid())
+  userId         String
+  profileId      String?
+  movieId        String?
+  tvShowId       String?
+  episodeId      String?
+  currentTime    Float        // playback position in seconds
+  duration       Float        // total duration in seconds
+  percent        Float        // completion percent (0-100)
+  completed      Boolean      @default(false)
+  updatedAt      DateTime     @default(now()) @updatedAt
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile        UserProfile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  movie          Movie?       @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  tvShow         TVShow?      @relation(fields: [tvShowId], references: [id], onDelete: Cascade)
+  episode        Episode?     @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, movieId])
+  @@unique([userId, episodeId])
+  @@index([userId, updatedAt])
+  @@map("viewing_progress")
+}
+
+model WatchHistory {
+  id        String       @id @default(cuid())
+  userId    String
+  profileId String?
+  movieId   String?
+  tvShowId  String?
+  episodeId String?
+  watchedAt DateTime     @default(now())
+
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile   UserProfile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  movie     Movie?       @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  tvShow    TVShow?      @relation(fields: [tvShowId], references: [id], onDelete: Cascade)
+  episode   Episode?     @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([userId, watchedAt])
+  @@map("watch_history")
+}
+
+model Rating {
+  id        String    @id @default(cuid())
+  userId    String
+  movieId   String?
+  tvShowId  String?
+  score     Int       // 1 for thumbs down, 2 for thumbs up, 3 for double thumbs up (love it)
+  review    String?   @db.Text
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movie     Movie?    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  tvShow    TVShow?   @relation(fields: [tvShowId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, movieId])
+  @@unique([userId, tvShowId])
+  @@index([userId])
+  @@map("ratings")
+}

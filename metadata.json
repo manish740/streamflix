@@ -1,0 +1,6 @@
+{
+  "name": "StreamFlix",
+  "description": "A cinematic streaming platform featuring film and TV catalogs, integrated YouTube music/video playback, persistent mini-player, queue management, and user profiles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
