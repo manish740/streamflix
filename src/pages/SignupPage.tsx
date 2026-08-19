@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { SocialAuthButtons } from '../components/SocialAuthButtons';
 import { Lock, Mail, User, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 
 export const SignupPage: React.FC = () => {
-  const { signup, signInWithGoogle, signInWithFacebook, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { signup, isLoading } = useAuth();
   const navigate = useNavigate();
 
   const [name, setName] = useState('');
@@ -15,48 +14,6 @@ export const SignupPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeSocial, setActiveSocial] = useState<'google' | 'facebook' | null>(null);
-
-  // If already authenticated, redirect to profiles
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/profiles', { replace: true });
-    }
-  }, [isAuthenticated, navigate]);
-
-  const handleGoogleAuth = async () => {
-    setError('');
-    setActiveSocial('google');
-    try {
-      const res = await signInWithGoogle();
-      if (res.success) {
-        navigate('/profiles', { replace: true });
-      } else {
-        setError(res.error || 'Google sign-in was cancelled.');
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Google sign-in failed. Please try again.');
-    } finally {
-      setActiveSocial(null);
-    }
-  };
-
-  const handleFacebookAuth = async () => {
-    setError('');
-    setActiveSocial('facebook');
-    try {
-      const res = await signInWithFacebook();
-      if (res.success) {
-        navigate('/profiles', { replace: true });
-      } else {
-        setError(res.error || 'Facebook sign-in failed.');
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Facebook sign-in failed. Please try again.');
-    } finally {
-      setActiveSocial(null);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,12 +25,12 @@ export const SignupPage: React.FC = () => {
     }
 
     if (!email.trim() || !email.includes('@')) {
-      setError('Please enter a valid email address.');
+      setError('Please provide a valid email address.');
       return;
     }
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long.');
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.');
       return;
     }
 
@@ -83,21 +40,15 @@ export const SignupPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    try {
-      const res = await signup(name, email, password);
-      if (res.success) {
-        navigate('/profiles', { replace: true });
-      } else {
-        setError(res.error || 'Unable to create account. Please try again.');
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Unable to create account. Please try again.');
-    } finally {
-      setIsSubmitting(false);
+    const res = await signup(name, email, password);
+    setIsSubmitting(false);
+
+    if (res.success) {
+      navigate('/profiles', { replace: true });
+    } else {
+      setError(res.error || 'Failed to create account. Please try again.');
     }
   };
-
-  const isAnyLoading = isSubmitting || activeSocial !== null || authLoading;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col justify-between relative overflow-hidden">
@@ -137,7 +88,7 @@ export const SignupPage: React.FC = () => {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Create Account</h1>
             <p className="text-xs text-zinc-400 mt-1.5">
-              Start your 4K Ultra HD streaming journey
+              Start your 4K Ultra HD streaming journey with unlimited profiles
             </p>
           </div>
 
@@ -171,25 +122,6 @@ export const SignupPage: React.FC = () => {
             </div>
           )}
 
-          {/* Social Authentication Options */}
-          <div className="space-y-3">
-            <SocialAuthButtons
-              onGoogleClick={handleGoogleAuth}
-              onFacebookClick={handleFacebookAuth}
-              isLoading={isAnyLoading}
-              activeProvider={activeSocial}
-            />
-
-            {/* Visual Divider */}
-            <div className="relative flex items-center justify-center py-2">
-              <div className="border-t border-zinc-800 w-full" />
-              <span className="bg-[#0c0c0c] px-3 text-xs uppercase font-semibold text-zinc-500 tracking-wider shrink-0">
-                OR
-              </span>
-              <div className="border-t border-zinc-800 w-full" />
-            </div>
-          </div>
-
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-3.5">
             <div>
@@ -202,8 +134,7 @@ export const SignupPage: React.FC = () => {
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="e.g. Alex Sterling"
-                  disabled={isAnyLoading}
-                  className="w-full bg-[#050505] border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-[#E50914] focus:outline-none transition-colors disabled:opacity-60"
+                  className="w-full bg-[#050505] border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-[#E50914] focus:outline-none transition-colors"
                   required
                 />
               </div>
@@ -219,8 +150,7 @@ export const SignupPage: React.FC = () => {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="name@example.com"
-                  disabled={isAnyLoading}
-                  className="w-full bg-[#050505] border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-[#E50914] focus:outline-none transition-colors disabled:opacity-60"
+                  className="w-full bg-[#050505] border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-[#E50914] focus:outline-none transition-colors"
                   required
                 />
               </div>
@@ -235,9 +165,8 @@ export const SignupPage: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  placeholder="Min 8 characters"
-                  disabled={isAnyLoading}
-                  className="w-full bg-[#050505] border border-zinc-800 rounded-xl pl-10 pr-10 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-[#E50914] focus:outline-none transition-colors disabled:opacity-60"
+                  placeholder="Min 6 characters"
+                  className="w-full bg-[#050505] border border-zinc-800 rounded-xl pl-10 pr-10 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-[#E50914] focus:outline-none transition-colors"
                   required
                 />
                 <button
@@ -263,8 +192,7 @@ export const SignupPage: React.FC = () => {
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter password"
-                  disabled={isAnyLoading}
-                  className="w-full bg-[#050505] border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-[#E50914] focus:outline-none transition-colors disabled:opacity-60"
+                  className="w-full bg-[#050505] border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-[#E50914] focus:outline-none transition-colors"
                   required
                 />
               </div>
@@ -274,10 +202,10 @@ export const SignupPage: React.FC = () => {
             <button
               id="signup-submit-btn"
               type="submit"
-              disabled={isAnyLoading}
-              className="w-full py-3.5 rounded-xl bg-[#E50914] hover:bg-[#b80710] disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-sm transition-all shadow-lg shadow-red-900/40 hover:shadow-red-900/60 active:scale-[0.99] flex items-center justify-center mt-2 cursor-pointer disabled:cursor-not-allowed"
+              disabled={isSubmitting || isLoading}
+              className="w-full py-3.5 rounded-xl bg-[#E50914] hover:bg-[#b80710] disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-sm transition-all shadow-lg shadow-red-900/40 hover:shadow-red-900/60 active:scale-[0.99] flex items-center justify-center mt-2"
             >
-              {isSubmitting ? (
+              {isSubmitting || isLoading ? (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>Creating Account...</span>
@@ -295,7 +223,7 @@ export const SignupPage: React.FC = () => {
               to="/login"
               className="text-white hover:text-[#E50914] font-semibold underline transition-colors"
             >
-              Sign In
+              Sign in.
             </Link>
           </div>
         </div>

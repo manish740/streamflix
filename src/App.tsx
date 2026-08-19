@@ -12,8 +12,6 @@ import { HomePage } from './pages/HomePage';
 import { MoviesPage } from './pages/MoviesPage';
 import { TvShowsPage } from './pages/TvShowsPage';
 import { MusicPage } from './pages/MusicPage';
-import { AudioPlayerPage } from './pages/AudioPlayerPage';
-import { VideoPlayerPage } from './pages/VideoPlayerPage';
 import { NewPopularPage } from './pages/NewPopularPage';
 import { MyListPage } from './pages/MyListPage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -73,22 +71,6 @@ const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute>
               <MusicPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/music/audio"
-          element={
-            <ProtectedRoute>
-              <AudioPlayerPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/music/video"
-          element={
-            <ProtectedRoute>
-              <VideoPlayerPage />
             </ProtectedRoute>
           }
         />

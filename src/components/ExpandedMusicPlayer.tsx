@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useMusic } from '../context/MusicContext';
 import { CURATED_MUSIC_TRACKS } from '../services/youtubeService';
 import {
@@ -14,13 +13,10 @@ import {
   ListMusic,
   Maximize2,
   Eye,
-  Disc3,
-  Video,
-  Music2
+  Disc3
 } from 'lucide-react';
 
 export const ExpandedMusicPlayer: React.FC = () => {
-  const navigate = useNavigate();
   const {
     currentTrack,
     isPlaying,
@@ -39,9 +35,7 @@ export const ExpandedMusicPlayer: React.FC = () => {
     toggleFavorite,
     isFavorite,
     toggleQueue,
-    playTrack,
-    switchToVideo,
-    switchToAudio
+    playTrack
   } = useMusic();
 
   const [activeTab, setActiveTab] = useState<'video' | 'details' | 'similar'>('video');
@@ -49,16 +43,6 @@ export const ExpandedMusicPlayer: React.FC = () => {
   if (!isExpandedModalOpen || !currentTrack) return null;
 
   const fav = isFavorite(currentTrack.id);
-
-  const handleOpenVideo = () => {
-    closeExpandedPlayer();
-    switchToVideo(navigate);
-  };
-
-  const handleOpenAudio = () => {
-    closeExpandedPlayer();
-    switchToAudio(navigate);
-  };
 
   // Format seconds to mm:ss
   const formatTime = (secs: number) => {
@@ -112,46 +96,20 @@ export const ExpandedMusicPlayer: React.FC = () => {
 
         {/* Video / Tab Area */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
-          {/* Main Visual Display & Player Mode Switch Actions */}
-          <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black shadow-2xl border border-zinc-800 group">
-            <img
-              src={currentTrack.thumbnailUrl}
-              alt={currentTrack.title}
-              className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-all duration-700 filter blur-xs"
-              referrerPolicy="no-referrer"
+          {/* Main Official YouTube Embedded Iframe */}
+          <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black shadow-2xl border border-zinc-800">
+            <iframe
+              id="expanded-yt-iframe"
+              src={`https://www.youtube.com/embed/${currentTrack.id}?autoplay=${
+                isPlaying ? 1 : 0
+              }&enablejsapi=1&rel=0&modestbranding=1&origin=${encodeURIComponent(
+                window.location.origin
+              )}`}
+              title={currentTrack.title}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              className="w-full h-full border-0"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-6">
-              <div className="space-y-2">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#E50914] text-white uppercase tracking-wider">
-                  Now Active
-                </span>
-                <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight">
-                  {currentTrack.title}
-                </h2>
-                <p className="text-sm text-zinc-300 font-medium">
-                  {currentTrack.artist}
-                </p>
-              </div>
-
-              {/* Mode switch action buttons */}
-              <div className="flex flex-wrap items-center gap-3 pt-4">
-                <button
-                  onClick={handleOpenVideo}
-                  className="px-4 py-2 rounded-full bg-[#E50914] hover:bg-red-700 text-white text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg shadow-red-950/60 transition-all hover:scale-105 active:scale-95"
-                >
-                  <Video className="w-4 h-4" />
-                  <span>Switch to Full Video Player</span>
-                </button>
-
-                <button
-                  onClick={handleOpenAudio}
-                  className="px-4 py-2 rounded-full bg-white/[0.08] hover:bg-white/[0.16] border border-white/15 text-white text-xs sm:text-sm font-bold flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
-                >
-                  <Music2 className="w-4 h-4 text-red-400" />
-                  <span>Switch to Full Audio Player</span>
-                </button>
-              </div>
-            </div>
           </div>
 
           {/* Scrubbing & Progress Timeline */}

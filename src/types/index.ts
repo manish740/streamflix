@@ -64,17 +64,12 @@ export interface UserProfile {
 
 export interface User {
   id: string;
-  userId?: string;
   email: string;
   name: string;
   avatar: string;
-  photoURL?: string;
-  provider?: 'google' | 'facebook' | 'password' | 'email';
   role: 'user' | 'admin';
   profiles: UserProfile[];
   activeProfileId: string;
-  createdAt?: string;
-  updatedAt?: string;
 }
 
 export interface ViewingProgress {

@@ -1,5 +1,4 @@
 import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { useMusic } from '../context/MusicContext';
 import { YouTubePlayer } from './YouTubePlayer';
 import {
@@ -9,21 +8,17 @@ import {
   SkipForward,
   Volume2,
   VolumeX,
+  Maximize2,
   X,
   ListMusic,
-  Heart,
-  Headphones,
-  Video
+  Disc3,
+  Heart
 } from 'lucide-react';
 
 export const MusicMiniPlayer: React.FC = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-
   const {
     currentTrack,
     isPlaying,
-    activePlayer,
     currentTime,
     duration,
     volume,
@@ -36,45 +31,32 @@ export const MusicMiniPlayer: React.FC = () => {
     seekTo,
     setVolume,
     toggleMute,
+    openExpandedPlayer,
     toggleQueue,
     toggleFavorite,
     isFavorite,
-    audioPlayerRef,
-    switchToAudio,
-    switchToVideo,
+    playerRef,
     syncProgress,
     handleTrackEnded,
     handlePlayerPlay,
     handlePlayerPause
   } = useMusic();
 
-  // Hide the floating mini bar on dedicated Audio or Video player pages to avoid duplicate UI
-  const isVideoRoute = location.pathname === '/music/video';
-  const isDedicatedPage =
-    location.pathname === '/music/audio' || isVideoRoute;
-
-  // IMPORTANT: Audio source MUST only be active/playing when activePlayer is 'audio' and NOT on Video page
-  const isAudioActive = activePlayer === 'audio' && !isVideoRoute;
-
-  if (!currentTrack) return null;
-
-  // If on dedicated page or mini-player dismissed, keep the underlying background YouTube player ONLY IF in audio mode
-  if (isDedicatedPage || !isMiniPlayerVisible) {
-    if (!isAudioActive) return null;
-    return (
+  if (!isMiniPlayerVisible || !currentTrack) {
+    // Keep YouTube player container present if a track is active in background
+    return currentTrack ? (
       <div className="hidden">
         <YouTubePlayer
-          ref={audioPlayerRef}
+          ref={playerRef}
           videoId={currentTrack.id}
           autoplay={isPlaying}
-          startTime={currentTime}
           onPlay={handlePlayerPlay}
           onPause={handlePlayerPause}
           onEnded={handleTrackEnded}
           onProgress={syncProgress}
         />
       </div>
-    );
+    ) : null;
   }
 
   const formatTime = (secs: number) => {
@@ -93,34 +75,23 @@ export const MusicMiniPlayer: React.FC = () => {
     seekTo(pos * (duration || 100));
   };
 
-  const handleOpenAudioPage = () => {
-    switchToAudio(navigate);
-  };
-
-  const handleOpenVideoPage = () => {
-    switchToVideo(navigate);
-  };
-
   return (
     <div
       id="music-mini-player"
       className="fixed bottom-0 left-0 right-0 z-40 bg-[#0c0c0c]/98 backdrop-blur-xl border-t border-zinc-800 shadow-2xl shadow-black transition-all duration-300 select-none animate-slide-up"
     >
-      {/* Background YouTube player engine (Audio Mode Only) */}
-      {isAudioActive && (
-        <div className="hidden">
-          <YouTubePlayer
-            ref={audioPlayerRef}
-            videoId={currentTrack.id}
-            autoplay={isPlaying}
-            startTime={currentTime}
-            onPlay={handlePlayerPlay}
-            onPause={handlePlayerPause}
-            onEnded={handleTrackEnded}
-            onProgress={syncProgress}
-          />
-        </div>
-      )}
+      {/* Offscreen / Mini background YouTube player */}
+      <div className="hidden">
+        <YouTubePlayer
+          ref={playerRef}
+          videoId={currentTrack.id}
+          autoplay={isPlaying}
+          onPlay={handlePlayerPlay}
+          onPause={handlePlayerPause}
+          onEnded={handleTrackEnded}
+          onProgress={syncProgress}
+        />
+      </div>
 
       {/* Top Scrub Timeline Bar */}
       <div
@@ -142,9 +113,9 @@ export const MusicMiniPlayer: React.FC = () => {
         <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 max-w-[45%] sm:max-w-[30%]">
           {/* Thumbnail */}
           <div
-            onClick={handleOpenAudioPage}
+            onClick={openExpandedPlayer}
             className="relative w-11 h-11 sm:w-13 sm:h-13 rounded-lg overflow-hidden shrink-0 bg-zinc-900 border border-zinc-700/80 cursor-pointer group shadow-md"
-            title="Open Audio Player"
+            title="Expand player"
           >
             <img
               src={currentTrack.thumbnailUrl}
@@ -153,7 +124,7 @@ export const MusicMiniPlayer: React.FC = () => {
               referrerPolicy="no-referrer"
             />
             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-              <Headphones className="w-4 h-4 text-white" />
+              <Maximize2 className="w-4 h-4 text-white" />
             </div>
             {isPlaying && (
               <div className="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-[#E50914] animate-ping" />
@@ -164,9 +135,8 @@ export const MusicMiniPlayer: React.FC = () => {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <p
-                onClick={handleOpenAudioPage}
+                onClick={openExpandedPlayer}
                 className="text-xs sm:text-sm font-bold text-white truncate cursor-pointer hover:text-[#E50914] transition-colors"
-                title="Open Audio Player"
               >
                 {currentTrack.title}
               </p>
@@ -235,30 +205,10 @@ export const MusicMiniPlayer: React.FC = () => {
           </div>
         </div>
 
-        {/* Right: Mode Switchers, Volume, Queue, Close */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5">
-          {/* Quick Audio Player Mode Button */}
-          <button
-            onClick={handleOpenAudioPage}
-            className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
-            title="Open Audio Player"
-          >
-            <Headphones className="w-3.5 h-3.5 text-red-400" />
-            <span className="hidden md:inline">Audio</span>
-          </button>
-
-          {/* Quick Video Player Mode Button */}
-          <button
-            onClick={handleOpenVideoPage}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#E50914]/20 border border-red-500/40 text-xs font-semibold text-red-400 hover:text-white hover:bg-[#E50914] transition-colors"
-            title="Watch Video"
-          >
-            <Video className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Watch</span>
-          </button>
-
+        {/* Right: Volume, Queue, Expand, Close */}
+        <div className="flex items-center gap-1.5 sm:gap-3">
           {/* Volume slider (desktop) */}
-          <div className="hidden lg:flex items-center gap-2 ml-2">
+          <div className="hidden lg:flex items-center gap-2">
             <button
               onClick={toggleMute}
               className="text-zinc-400 hover:text-white p-1 transition-colors"
@@ -276,7 +226,7 @@ export const MusicMiniPlayer: React.FC = () => {
               max={100}
               value={isMuted ? 0 : volume}
               onChange={e => setVolume(Number(e.target.value))}
-              className="w-16 xl:w-20 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-[#E50914]"
+              className="w-16 xl:w-24 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-[#E50914]"
               aria-label="Volume"
             />
           </div>
@@ -292,13 +242,24 @@ export const MusicMiniPlayer: React.FC = () => {
             <ListMusic className="w-4 h-4" />
           </button>
 
+          {/* Expand Full Player */}
+          <button
+            id="mini-expand-btn"
+            onClick={openExpandedPlayer}
+            className="p-1.5 sm:p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+            title="Expand Player"
+            aria-label="Expand Player"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+
           {/* Close mini player */}
           <button
             id="mini-close-btn"
             onClick={closeMiniPlayer}
             className="p-1.5 sm:p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-zinc-900 transition-colors"
-            title="Dismiss Mini Player"
-            aria-label="Dismiss Mini Player"
+            title="Close Player"
+            aria-label="Close Player"
           >
             <X className="w-4 h-4" />
           </button>

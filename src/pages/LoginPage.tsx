@@ -1,21 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { SocialAuthButtons } from '../components/SocialAuthButtons';
 import { Lock, Mail, Eye, EyeOff, Sparkles, ShieldCheck } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const {
-    login,
-    signInWithGoogle,
-    signInWithFacebook,
-    demoLogin,
-    isAuthenticated,
-    isLoading: authLoading
-  } = useAuth();
-
+  const { login, demoLogin, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const from = (location.state as any)?.from?.pathname || '/profiles';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,48 +16,6 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeSocial, setActiveSocial] = useState<'google' | 'facebook' | null>(null);
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/profiles', { replace: true });
-    }
-  }, [isAuthenticated, navigate]);
-
-  const handleGoogleAuth = async () => {
-    setError('');
-    setActiveSocial('google');
-    try {
-      const res = await signInWithGoogle();
-      if (res.success) {
-        navigate('/profiles', { replace: true });
-      } else {
-        setError(res.error || 'Google sign-in was cancelled.');
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Google sign-in failed. Please try again.');
-    } finally {
-      setActiveSocial(null);
-    }
-  };
-
-  const handleFacebookAuth = async () => {
-    setError('');
-    setActiveSocial('facebook');
-    try {
-      const res = await signInWithFacebook();
-      if (res.success) {
-        navigate('/profiles', { replace: true });
-      } else {
-        setError(res.error || 'Facebook sign-in failed.');
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Facebook sign-in failed. Please try again.');
-    } finally {
-      setActiveSocial(null);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,17 +32,13 @@ export const LoginPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    try {
-      const res = await login(email, password, rememberMe);
-      if (res.success) {
-        navigate('/profiles', { replace: true });
-      } else {
-        setError(res.error || 'Email or password is incorrect.');
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Email or password is incorrect.');
-    } finally {
-      setIsSubmitting(false);
+    const res = await login(email, password, rememberMe);
+    setIsSubmitting(false);
+
+    if (res.success) {
+      navigate('/profiles', { replace: true });
+    } else {
+      setError(res.error || 'Login failed. Please check your credentials.');
     }
   };
 
@@ -106,8 +53,6 @@ export const LoginPage: React.FC = () => {
     await demoLogin(true);
     navigate('/profiles', { replace: true });
   };
-
-  const isAnyLoading = isSubmitting || activeSocial !== null || authLoading;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white flex flex-col justify-between relative overflow-hidden">
@@ -145,10 +90,37 @@ export const LoginPage: React.FC = () => {
       <main className="relative z-10 flex-grow flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-md bg-[#0c0c0c]/90 backdrop-blur-xl rounded-2xl border border-zinc-800/80 shadow-2xl p-6 sm:p-10 space-y-6">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Welcome Back</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Sign In</h1>
             <p className="text-xs text-zinc-400 mt-1.5">
               Access your watchlist, recommendations, and 4K streams
             </p>
+          </div>
+
+          {/* 1-Click Quick Demo Login Shortcuts */}
+          <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
+              <Sparkles className="w-4 h-4 text-yellow-400" />
+              <span>Instant Demo Access</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                id="quick-demo-user-btn"
+                type="button"
+                onClick={handleQuickDemoUser}
+                className="px-3 py-1.5 rounded-lg bg-[#E50914] hover:bg-[#b80710] text-white text-xs font-bold transition-all shadow-md text-center truncate"
+              >
+                Standard User
+              </button>
+              <button
+                id="quick-demo-admin-btn"
+                type="button"
+                onClick={handleQuickDemoAdmin}
+                className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-bold border border-zinc-700 transition-all text-center flex items-center justify-center gap-1"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+                Admin Demo
+              </button>
+            </div>
           </div>
 
           {/* Error Banner */}
@@ -160,25 +132,6 @@ export const LoginPage: React.FC = () => {
               {error}
             </div>
           )}
-
-          {/* Social Authentication Options */}
-          <div className="space-y-3">
-            <SocialAuthButtons
-              onGoogleClick={handleGoogleAuth}
-              onFacebookClick={handleFacebookAuth}
-              isLoading={isAnyLoading}
-              activeProvider={activeSocial}
-            />
-
-            {/* Visual Divider */}
-            <div className="relative flex items-center justify-center py-2">
-              <div className="border-t border-zinc-800 w-full" />
-              <span className="bg-[#0c0c0c] px-3 text-xs uppercase font-semibold text-zinc-500 tracking-wider shrink-0">
-                OR
-              </span>
-              <div className="border-t border-zinc-800 w-full" />
-            </div>
-          </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -194,8 +147,7 @@ export const LoginPage: React.FC = () => {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="alex.sterling@streamflix.io"
-                  disabled={isAnyLoading}
-                  className="w-full bg-[#050505] border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-zinc-500 focus:border-[#E50914] focus:outline-none transition-colors disabled:opacity-60"
+                  className="w-full bg-[#050505] border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-zinc-500 focus:border-[#E50914] focus:outline-none transition-colors"
                   required
                 />
               </div>
@@ -219,8 +171,7 @@ export const LoginPage: React.FC = () => {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  disabled={isAnyLoading}
-                  className="w-full bg-[#050505] border border-zinc-800 rounded-xl pl-10 pr-10 py-3 text-sm text-white placeholder-zinc-500 focus:border-[#E50914] focus:outline-none transition-colors disabled:opacity-60"
+                  className="w-full bg-[#050505] border border-zinc-800 rounded-xl pl-10 pr-10 py-3 text-sm text-white placeholder-zinc-500 focus:border-[#E50914] focus:outline-none transition-colors"
                   required
                 />
                 <button
@@ -246,19 +197,17 @@ export const LoginPage: React.FC = () => {
                 />
                 <span>Remember me</span>
               </label>
-              <Link to="/forgot-password" className="text-[11px] text-zinc-500 hover:text-zinc-300">
-                Need Help?
-              </Link>
+              <span className="text-[11px] text-zinc-500">Need Help?</span>
             </div>
 
             {/* Submit Button */}
             <button
               id="login-submit-btn"
               type="submit"
-              disabled={isAnyLoading}
-              className="w-full py-3.5 rounded-xl bg-[#E50914] hover:bg-[#b80710] disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-sm transition-all shadow-lg shadow-red-900/40 hover:shadow-red-900/60 active:scale-[0.99] flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+              disabled={isSubmitting || isLoading}
+              className="w-full py-3.5 rounded-xl bg-[#E50914] hover:bg-[#b80710] disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-bold text-sm transition-all shadow-lg shadow-red-900/40 hover:shadow-red-900/60 active:scale-[0.99] flex items-center justify-center"
             >
-              {isSubmitting ? (
+              {isSubmitting || isLoading ? (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>Signing In...</span>
@@ -269,41 +218,14 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* 1-Click Quick Demo Login Shortcuts */}
-          <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-400">
-              <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
-              <span>Instant Demo Access</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                id="quick-demo-user-btn"
-                type="button"
-                onClick={handleQuickDemoUser}
-                className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-all text-center truncate border border-zinc-700"
-              >
-                Standard User
-              </button>
-              <button
-                id="quick-demo-admin-btn"
-                type="button"
-                onClick={handleQuickDemoAdmin}
-                className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition-all text-center flex items-center justify-center gap-1"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-                Admin Demo
-              </button>
-            </div>
-          </div>
-
           {/* Footer switch to Sign Up */}
           <div className="pt-2 text-center text-xs text-zinc-400 border-t border-zinc-800/80">
-            <span>Don't have an account? </span>
+            <span>New to StreamFlix? </span>
             <Link
               to="/signup"
               className="text-white hover:text-[#E50914] font-semibold underline transition-colors"
             >
-              Create Account
+              Sign up now.
             </Link>
           </div>
         </div>

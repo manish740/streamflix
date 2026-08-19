@@ -10,7 +10,7 @@ export const QueueDrawer: React.FC = () => {
     isPlaying,
     isQueueOpen,
     setIsQueueOpen,
-    playQueueItem,
+    playTrack,
     togglePlay,
     removeFromQueue,
     clearQueue
@@ -108,11 +108,11 @@ export const QueueDrawer: React.FC = () => {
             </div>
           ) : (
             queue.map((track, idx) => {
-              const isCurrent = currentTrack ? track.id === currentTrack.id : false;
+              const isCurrent = idx === currentQueueIndex;
               return (
                 <div
                   key={`${track.id}-${idx}`}
-                  onClick={() => playQueueItem(track, idx)}
+                  onClick={() => playTrack(track)}
                   className={`group py-2.5 px-3 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-all ${
                     isCurrent
                       ? 'bg-zinc-900 border border-[#E50914]/40 text-white'

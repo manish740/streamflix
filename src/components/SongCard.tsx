@@ -1,17 +1,16 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { YouTubeTrack } from '../types';
 import { useMusic } from '../context/MusicContext';
-import { Play, Pause, Plus, Check, Heart, Disc3, Eye, Headphones, Video } from 'lucide-react';
+import { Play, Pause, Plus, Check, Heart, Disc3, Eye } from 'lucide-react';
 
 interface SongCardProps {
   track: YouTubeTrack;
   rank?: number;
   featured?: boolean;
+  onPlayOverride?: () => void;
 }
 
 export const SongCard: React.FC<SongCardProps> = ({ track, rank, featured }) => {
-  const navigate = useNavigate();
   const {
     currentTrack,
     isPlaying,
@@ -30,24 +29,7 @@ export const SongCard: React.FC<SongCardProps> = ({ track, rank, featured }) => 
   const inQueue = queue.some(t => t.id === track.id);
   const fav = isFavorite(track.id);
 
-  const handleCardClick = () => {
-    playTrack(track);
-    navigate(`/music/audio?videoId=${track.id}`);
-  };
-
-  const handleAudioClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    playTrack(track);
-    navigate(`/music/audio?videoId=${track.id}`);
-  };
-
-  const handleVideoClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    playTrack(track);
-    navigate(`/music/video?videoId=${track.id}`);
-  };
-
-  const handlePlayToggle = (e: React.MouseEvent) => {
+  const handlePlayClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isCurrentTrack) {
       togglePlay();
@@ -69,7 +51,7 @@ export const SongCard: React.FC<SongCardProps> = ({ track, rank, featured }) => 
   return (
     <div
       id={`song-card-${track.id}`}
-      onClick={handleCardClick}
+      onClick={handlePlayClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={`group relative flex-shrink-0 cursor-pointer rounded-xl bg-zinc-900/90 border transition-all duration-300 select-none overflow-hidden ${
@@ -102,40 +84,28 @@ export const SongCard: React.FC<SongCardProps> = ({ track, rank, featured }) => 
           {track.duration || '3:30'}
         </span>
 
-        {/* Center Hover Action Overlay */}
+        {/* Center Hover Play Button */}
         <div
-          className={`absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center gap-2 transition-opacity duration-200 ${
+          className={`absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center transition-opacity duration-200 ${
             isHovered || isPlayingThis ? 'opacity-100' : 'opacity-0'
           }`}
         >
-          {/* Quick Audio Mode Button */}
           <button
-            onClick={handleAudioClick}
-            className="p-2.5 rounded-full bg-white hover:bg-zinc-200 text-black shadow-xl transition-transform hover:scale-110 active:scale-95"
-            title="Listen in Audio Player"
-            aria-label="Listen in Audio Mode"
+            onClick={handlePlayClick}
+            className="p-3 rounded-full bg-white hover:bg-zinc-200 text-black shadow-2xl transition-transform hover:scale-110 active:scale-95"
+            aria-label={isPlayingThis ? 'Pause' : 'Play'}
           >
             {isPlayingThis ? (
-              <Pause className="w-4 h-4 fill-black" />
+              <Pause className="w-5 h-5 fill-black" />
             ) : (
-              <Headphones className="w-4 h-4 text-black" />
+              <Play className="w-5 h-5 fill-black ml-0.5" />
             )}
-          </button>
-
-          {/* Quick Video Mode Button */}
-          <button
-            onClick={handleVideoClick}
-            className="p-2.5 rounded-full bg-[#E50914] hover:bg-red-600 text-white shadow-xl transition-transform hover:scale-110 active:scale-95"
-            title="Watch Video in Cinema Player"
-            aria-label="Watch Video"
-          >
-            <Video className="w-4 h-4 text-white" />
           </button>
         </div>
 
-        {/* Audio Equalizer Active Indicator */}
+        {/* Audio Equalizer Active Waves Indicator */}
         {isPlayingThis && (
-          <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/80 px-2 py-0.5 rounded-full border border-red-500/60 shadow">
+          <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/70 px-2 py-1 rounded-full border border-red-500/50">
             <Disc3 className="w-3.5 h-3.5 text-[#E50914] animate-spin" />
             <span className="text-[9px] font-bold text-red-400 uppercase">Playing</span>
           </div>
@@ -159,7 +129,7 @@ export const SongCard: React.FC<SongCardProps> = ({ track, rank, featured }) => 
           {track.artist}
         </p>
 
-        {/* Bottom Stats & Quick Actions */}
+        {/* Bottom stats & Quick Actions */}
         <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80 text-[10px] text-zinc-500">
           <span className="flex items-center gap-1 font-mono truncate">
             <Eye className="w-3 h-3 text-zinc-500" />

@@ -42,8 +42,6 @@ export interface YTPlayer {
   getCurrentTime: () => number;
   getDuration: () => number;
   getPlayerState: () => number;
-  setPlaybackRate?: (suggestedRate: number) => void;
-  getPlaybackRate?: () => number;
   loadVideoById: (videoId: string, startSeconds?: number) => void;
   cueVideoById: (videoId: string, startSeconds?: number) => void;
   destroy: () => void;
@@ -67,7 +65,6 @@ export interface YTPlayerErrorEvent {
 export interface YouTubePlayerProps {
   videoId: string;
   autoplay?: boolean;
-  startTime?: number;
   playlist?: string[];
   controls?: boolean;
   className?: string;
@@ -82,17 +79,12 @@ export interface YouTubePlayerProps {
 export interface YouTubePlayerRef {
   play: () => void;
   pause: () => void;
-  stop: () => void;
   seekTo: (seconds: number) => void;
   setVolume: (vol: number) => void;
   mute: () => void;
   unMute: () => void;
-  setPlaybackRate: (rate: number) => void;
   getCurrentTime: () => number;
   getDuration: () => number;
-  loadVideoById: (videoId: string, startSeconds?: number) => void;
-  cueVideoById: (videoId: string, startSeconds?: number) => void;
-  destroy: () => void;
   getPlayer: () => YTPlayer | null;
 }
 
@@ -101,8 +93,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
     {
       videoId,
       autoplay = true,
-      startTime = 0,
-      playlist: _playlist, // Ignored to ensure StreamFlix queue controls sequence exclusively
+      playlist,
       controls = true,
       className = '',
       onPlay,
@@ -119,109 +110,17 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
     const [isApiReady, setIsApiReady] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
-    const lastEndedVideoRef = useRef<string | null>(null);
-
-    // Keep latest callbacks in ref to prevent duplicate event listener recreations
-    const callbacksRef = useRef({ onPlay, onPause, onEnded, onProgress, onError, onReady });
-    callbacksRef.current = { onPlay, onPause, onEnded, onProgress, onError, onReady };
 
     // Expose methods via ref
     useImperativeHandle(ref, () => ({
-      play: () => {
-        try {
-          playerInstanceRef.current?.playVideo();
-        } catch {
-          // ignore
-        }
-      },
-      pause: () => {
-        try {
-          playerInstanceRef.current?.pauseVideo();
-        } catch {
-          // ignore
-        }
-      },
-      stop: () => {
-        try {
-          playerInstanceRef.current?.stopVideo();
-        } catch {
-          // ignore
-        }
-      },
-      destroy: () => {
-        try {
-          playerInstanceRef.current?.destroy();
-          playerInstanceRef.current = null;
-        } catch {
-          // ignore
-        }
-      },
-      seekTo: (seconds: number) => {
-        try {
-          playerInstanceRef.current?.seekTo(seconds, true);
-        } catch {
-          // ignore
-        }
-      },
-      setVolume: (vol: number) => {
-        try {
-          playerInstanceRef.current?.setVolume(vol);
-        } catch {
-          // ignore
-        }
-      },
-      mute: () => {
-        try {
-          playerInstanceRef.current?.mute();
-        } catch {
-          // ignore
-        }
-      },
-      unMute: () => {
-        try {
-          playerInstanceRef.current?.unMute();
-        } catch {
-          // ignore
-        }
-      },
-      setPlaybackRate: (rate: number) => {
-        try {
-          playerInstanceRef.current?.setPlaybackRate?.(rate);
-        } catch {
-          // ignore
-        }
-      },
-      loadVideoById: (vid: string, startSec: number = 0) => {
-        try {
-          lastEndedVideoRef.current = null;
-          playerInstanceRef.current?.loadVideoById(vid, startSec);
-          playerInstanceRef.current?.playVideo();
-        } catch {
-          // ignore
-        }
-      },
-      cueVideoById: (vid: string, startSec: number = 0) => {
-        try {
-          lastEndedVideoRef.current = null;
-          playerInstanceRef.current?.cueVideoById(vid, startSec);
-        } catch {
-          // ignore
-        }
-      },
-      getCurrentTime: () => {
-        try {
-          return playerInstanceRef.current?.getCurrentTime() || 0;
-        } catch {
-          return 0;
-        }
-      },
-      getDuration: () => {
-        try {
-          return playerInstanceRef.current?.getDuration() || 0;
-        } catch {
-          return 0;
-        }
-      },
+      play: () => playerInstanceRef.current?.playVideo(),
+      pause: () => playerInstanceRef.current?.pauseVideo(),
+      seekTo: (seconds: number) => playerInstanceRef.current?.seekTo(seconds, true),
+      setVolume: (vol: number) => playerInstanceRef.current?.setVolume(vol),
+      mute: () => playerInstanceRef.current?.mute(),
+      unMute: () => playerInstanceRef.current?.unMute(),
+      getCurrentTime: () => playerInstanceRef.current?.getCurrentTime() || 0,
+      getDuration: () => playerInstanceRef.current?.getDuration() || 0,
       getPlayer: () => playerInstanceRef.current
     }));
 
@@ -265,15 +164,15 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
           try {
             const current = playerInstanceRef.current.getCurrentTime() || 0;
             const dur = playerInstanceRef.current.getDuration() || 0;
-            if (callbacksRef.current.onProgress) {
-              callbacksRef.current.onProgress(current, dur);
+            if (onProgress) {
+              onProgress(current, dur);
             }
           } catch {
             // Player may be unmounted or buffering
           }
         }
       }, 500);
-    }, [clearProgressInterval]);
+    }, [clearProgressInterval, onProgress]);
 
     // Step 2: Initialize or update YouTube Player instance
     useEffect(() => {
@@ -282,18 +181,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
       const element = document.getElementById(containerId.current);
       if (!element) return;
 
-      // Reset ended guard for this new videoId
-      lastEndedVideoRef.current = null;
-
-      // If player already exists, reuse the existing embedded player instance and load video
+      // If player already exists, just load or cue the new video ID
       if (playerInstanceRef.current) {
         try {
-          const seekSeconds = Math.max(0, startTime || 0);
           if (autoplay) {
-            playerInstanceRef.current.loadVideoById(videoId, seekSeconds);
-            playerInstanceRef.current.playVideo();
+            playerInstanceRef.current.loadVideoById(videoId, 0);
           } else {
-            playerInstanceRef.current.cueVideoById(videoId, seekSeconds);
+            playerInstanceRef.current.cueVideoById(videoId, 0);
           }
           return;
         } catch {
@@ -314,25 +208,17 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
         playerVars: {
           autoplay: autoplay ? 1 : 0,
           controls: controls ? 1 : 0,
-          start: startTime && startTime > 0 ? Math.floor(startTime) : undefined,
           rel: 0,
           modestbranding: 1,
           playsinline: 1,
           enablejsapi: 1,
-          iv_load_policy: 3, // Disable annotations to prevent external link cards
-          origin: window.location.origin
+          origin: window.location.origin,
+          playlist: playlist && playlist.length > 0 ? playlist.join(',') : undefined
         },
         events: {
           onReady: (event: YTPlayerEvent) => {
             playerInstanceRef.current = event.target;
             setIsLoading(false);
-            if (startTime && startTime > 0) {
-              try {
-                event.target.seekTo(startTime, true);
-              } catch {
-                // ignore
-              }
-            }
             if (autoplay) {
               try {
                 event.target.playVideo();
@@ -340,34 +226,29 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
                 // Autoplay may need user interaction on mobile
               }
             }
-            if (callbacksRef.current.onReady) {
-              callbacksRef.current.onReady(event.target);
+            if (onReady) {
+              onReady(event.target);
             }
           },
           onStateChange: (event: YTPlayerStateChangeEvent) => {
             const state = event.data;
             if (window.YT && window.YT.PlayerState) {
               if (state === window.YT.PlayerState.PLAYING) {
-                lastEndedVideoRef.current = null;
                 startProgressInterval();
-                if (callbacksRef.current.onPlay) callbacksRef.current.onPlay();
+                if (onPlay) onPlay();
               } else if (state === window.YT.PlayerState.PAUSED) {
                 clearProgressInterval();
-                if (callbacksRef.current.onPause) callbacksRef.current.onPause();
+                if (onPause) onPause();
               } else if (state === window.YT.PlayerState.ENDED) {
                 clearProgressInterval();
-                // Prevent duplicate ended trigger for the same video completion
-                if (lastEndedVideoRef.current !== videoId) {
-                  lastEndedVideoRef.current = videoId;
-                  if (callbacksRef.current.onEnded) callbacksRef.current.onEnded();
-                }
+                if (onEnded) onEnded();
               }
             }
           },
           onError: (event: YTPlayerErrorEvent) => {
             setIsLoading(false);
             clearProgressInterval();
-            if (callbacksRef.current.onError) callbacksRef.current.onError(event.data);
+            if (onError) onError(event.data);
           }
         }
       });
@@ -382,7 +263,12 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
       videoId,
       autoplay,
       controls,
-      startTime,
+      playlist,
+      onPlay,
+      onPause,
+      onEnded,
+      onError,
+      onReady,
       startProgressInterval,
       clearProgressInterval
     ]);

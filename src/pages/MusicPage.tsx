@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useMusic } from '../context/MusicContext';
 import { useWatchlist } from '../context/WatchlistContext';
 import { YouTubeService, CURATED_MUSIC_TRACKS } from '../services/youtubeService';
@@ -15,7 +14,6 @@ import {
   Flame,
   Music,
   Headphones,
-  Video,
   Radio,
   ListMusic,
   RefreshCw,
@@ -26,7 +24,6 @@ import {
 } from 'lucide-react';
 
 export const MusicPage: React.FC = () => {
-  const navigate = useNavigate();
   const {
     playTrack,
     currentTrack,
@@ -439,38 +436,20 @@ export const MusicPage: React.FC = () => {
 
                   <div className="flex flex-wrap items-center gap-3 pt-2">
                     <button
-                      id="music-play-spotlight-audio-btn"
-                      onClick={() => {
-                        if (spotlightTrack) {
-                          playTrack(spotlightTrack, trendingTracks);
-                          navigate(`/music/audio?videoId=${spotlightTrack.id}`);
-                        }
-                      }}
-                      className="px-5 py-3 rounded-full bg-[#E50914] hover:bg-[#b80710] text-white font-bold flex items-center gap-2 text-sm transition-all shadow-xl shadow-red-900/40 hover:scale-105 active:scale-95"
+                      id="music-play-spotlight-btn"
+                      onClick={handlePlaySpotlight}
+                      className="px-6 py-3 rounded-full bg-[#E50914] hover:bg-[#b80710] text-white font-bold flex items-center gap-2 text-sm transition-all shadow-xl shadow-red-900/40 hover:scale-105 active:scale-95"
                     >
-                      <Headphones className="w-4 h-4" />
-                      <span>Listen Audio</span>
-                    </button>
-                    <button
-                      id="music-play-spotlight-video-btn"
-                      onClick={() => {
-                        if (spotlightTrack) {
-                          playTrack(spotlightTrack, trendingTracks);
-                          navigate(`/music/video?videoId=${spotlightTrack.id}`);
-                        }
-                      }}
-                      className="px-5 py-3 rounded-full bg-white hover:bg-zinc-200 text-black font-bold flex items-center gap-2 text-sm transition-all shadow-xl shadow-white/10 hover:scale-105 active:scale-95"
-                    >
-                      <Video className="w-4 h-4" />
-                      <span>Watch Video</span>
+                      <Play className="w-4 h-4 fill-white" />
+                      <span>{isPlaying && currentTrack?.id === spotlightTrack.id ? 'Playing' : 'Play Now'}</span>
                     </button>
                     <button
                       id="music-queue-spotlight-btn"
                       onClick={handleAddToQueueSpotlight}
-                      className="px-4 py-3 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-white font-semibold flex items-center gap-2 text-sm transition-all border border-zinc-700 hover:border-zinc-500"
+                      className="px-5 py-3 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-white font-semibold flex items-center gap-2 text-sm transition-all border border-zinc-700 hover:border-zinc-500"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>Queue</span>
+                      <span>Add to Queue</span>
                     </button>
                   </div>
                 </div>
