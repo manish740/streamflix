@@ -12,7 +12,10 @@ export const PersistentPlayerHost: React.FC = () => {
     syncProgress,
     handleTrackEnded,
     handlePlayerPlay,
-    handlePlayerPause
+    handlePlayerPause,
+    handlePlayerReady,
+    handleAutoplayBlocked,
+    handlePlaybackError
   } = useMusic();
 
   const location = useLocation();
@@ -120,6 +123,8 @@ export const PersistentPlayerHost: React.FC = () => {
 
   const trackId = currentTrack.videoId || currentTrack.id;
 
+  // Mobile-friendly positioning: when no visible anchor exists (e.g. audio mode or background route),
+  // keep iframe inside viewport with minimal opacity and dimensions so mobile browser does not throttle or suspend playback.
   const containerStyle: React.CSSProperties = targetRect
     ? {
         position: 'fixed',
@@ -136,14 +141,15 @@ export const PersistentPlayerHost: React.FC = () => {
       }
     : {
         position: 'fixed',
-        top: '-9999px',
-        left: '-9999px',
-        width: '1px',
-        height: '1px',
-        opacity: 0,
+        bottom: '80px',
+        right: '12px',
+        width: '160px',
+        height: '90px',
+        opacity: 0.001,
         pointerEvents: 'none',
-        zIndex: -10,
-        overflow: 'hidden'
+        zIndex: -1,
+        overflow: 'hidden',
+        borderRadius: '0.5rem'
       };
 
   return (
@@ -154,10 +160,13 @@ export const PersistentPlayerHost: React.FC = () => {
         autoplay={isPlaying}
         controls={true}
         className="w-full h-full"
+        onReady={handlePlayerReady}
         onPlay={handlePlayerPlay}
         onPause={handlePlayerPause}
         onEnded={handleTrackEnded}
         onProgress={syncProgress}
+        onAutoplayBlocked={handleAutoplayBlocked}
+        onError={handlePlaybackError}
       />
     </div>
   );

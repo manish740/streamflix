@@ -152,7 +152,7 @@ export const QueueDrawer: React.FC = () => {
                   onClick={() => {
                     // Clicking track plays it immediately and keeps subsequent songs in the queue
                     const remaining = queue.slice(idx + 1);
-                    playTrack(track, remaining);
+                    playTrack(track, { newQueue: remaining, userInitiated: true });
                   }}
                   className="group py-2.5 px-3 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-all hover:bg-zinc-900/60 text-zinc-300"
                 >

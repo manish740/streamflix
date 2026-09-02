@@ -19,6 +19,9 @@ export const ExpandedMusicPlayer: React.FC = () => {
   const {
     currentTrack,
     isPlaying,
+    autoplayBlocked,
+    playbackError,
+    retryPlayback,
     currentTime,
     duration,
     volume,
@@ -155,17 +158,33 @@ export const ExpandedMusicPlayer: React.FC = () => {
                   <SkipBack className="w-5 h-5" />
                 </button>
 
-                <button
-                  onClick={togglePlay}
-                  className="p-3.5 rounded-full bg-white hover:bg-zinc-200 text-black shadow-lg transition-transform hover:scale-105 active:scale-95"
-                  aria-label={isPlaying ? 'Pause track' : 'Play track'}
-                >
-                  {isPlaying ? (
-                    <Pause className="w-6 h-6 fill-black" />
-                  ) : (
-                    <Play className="w-6 h-6 fill-black ml-0.5" />
+                <div className="relative">
+                  {autoplayBlocked && (
+                    <button
+                      onClick={retryPlayback}
+                      className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#E50914] text-white text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap shadow-xl animate-bounce flex items-center gap-1 z-10"
+                    >
+                      <Play className="w-3 h-3 fill-white" />
+                      Tap to Play
+                    </button>
                   )}
-                </button>
+                  <button
+                    onClick={autoplayBlocked ? retryPlayback : togglePlay}
+                    className={`p-3.5 rounded-full text-black shadow-lg transition-transform hover:scale-105 active:scale-95 ${
+                      autoplayBlocked
+                        ? 'bg-[#E50914] text-white ring-4 ring-[#E50914]/40 animate-pulse'
+                        : 'bg-white hover:bg-zinc-200'
+                    }`}
+                    aria-label={isPlaying ? 'Pause track' : 'Play track'}
+                    title={autoplayBlocked ? 'Tap to Play' : isPlaying ? 'Pause' : 'Play'}
+                  >
+                    {isPlaying ? (
+                      <Pause className="w-6 h-6 fill-black" />
+                    ) : (
+                      <Play className={`w-6 h-6 ml-0.5 ${autoplayBlocked ? 'fill-white text-white' : 'fill-black'}`} />
+                    )}
+                  </button>
+                </div>
 
                 <button
                   onClick={playNext}

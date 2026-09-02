@@ -17,6 +17,8 @@ export const MusicMiniPlayer: React.FC = () => {
   const {
     currentTrack,
     isPlaying,
+    autoplayBlocked,
+    playbackError,
     currentTime,
     duration,
     volume,
@@ -24,6 +26,7 @@ export const MusicMiniPlayer: React.FC = () => {
     isMiniPlayerVisible,
     closeMiniPlayer,
     togglePlay,
+    retryPlayback,
     playNext,
     playPrevious,
     seekTo,
@@ -140,19 +143,34 @@ export const MusicMiniPlayer: React.FC = () => {
               <SkipBack className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
 
-            <button
-              id="mini-play-pause-btn"
-              onClick={togglePlay}
-              className="p-2 sm:p-2.5 rounded-full bg-white hover:bg-zinc-200 text-black shadow-lg transition-transform hover:scale-105 active:scale-95"
-              aria-label={isPlaying ? 'Pause' : 'Play'}
-              title={isPlaying ? 'Pause' : 'Play'}
-            >
-              {isPlaying ? (
-                <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-black" />
-              ) : (
-                <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-black ml-0.5" />
+            <div className="relative">
+              {autoplayBlocked && (
+                <button
+                  onClick={retryPlayback}
+                  className="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#E50914] text-white text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap shadow-lg animate-bounce flex items-center gap-1 z-10"
+                >
+                  <Play className="w-2.5 h-2.5 fill-white" />
+                  Tap to Play
+                </button>
               )}
-            </button>
+              <button
+                id="mini-play-pause-btn"
+                onClick={autoplayBlocked ? retryPlayback : togglePlay}
+                className={`p-2 sm:p-2.5 rounded-full text-black shadow-lg transition-transform hover:scale-105 active:scale-95 ${
+                  autoplayBlocked
+                    ? 'bg-[#E50914] text-white ring-4 ring-[#E50914]/40 animate-pulse'
+                    : 'bg-white hover:bg-zinc-200'
+                }`}
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+                title={autoplayBlocked ? 'Tap to Play' : isPlaying ? 'Pause' : 'Play'}
+              >
+                {isPlaying ? (
+                  <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-black" />
+                ) : (
+                  <Play className={`w-4 h-4 sm:w-5 sm:h-5 ml-0.5 ${autoplayBlocked ? 'fill-white text-white' : 'fill-black'}`} />
+                )}
+              </button>
+            </div>
 
             <button
               id="mini-next-btn"

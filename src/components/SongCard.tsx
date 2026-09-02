@@ -36,7 +36,7 @@ export const SongCard: React.FC<SongCardProps> = ({ track, rank, featured }) => 
     if (isCurrentTrack) {
       togglePlay();
     } else {
-      playTrack(track);
+      playTrack(track, { userInitiated: true });
     }
   };
 

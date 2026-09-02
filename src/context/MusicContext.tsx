@@ -1,15 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { YouTubeTrack } from '../types';
+import { YouTubeTrack, ActivePlayerMode, PlayTrackOptions, PlaybackState } from '../types';
 import { CURATED_MUSIC_TRACKS } from '../services/youtubeService';
 import { useAuth } from './AuthContext';
 import { YouTubePlayerRef } from '../components/YouTubePlayer';
 
+export type { ActivePlayerMode, PlayTrackOptions, PlaybackState };
 export type RepeatMode = 'off' | 'one' | 'all';
 export type PlaybackMode = 'audio' | 'video';
 
 interface MusicContextType {
   currentTrack: YouTubeTrack | null;
+  activePlayer: ActivePlayerMode;
   isPlaying: boolean;
+  isUserInitiated: boolean;
+  isPlayerReady: boolean;
+  autoplayBlocked: boolean;
+  playbackError: string | null;
   queue: YouTubeTrack[];
   currentQueueIndex: number;
   currentTime: number;
@@ -26,7 +32,9 @@ interface MusicContextType {
   favorites: string[];
 
   // Central Player & Lifecycle controls
-  playTrack: (track: YouTubeTrack, newQueue?: YouTubeTrack[]) => Promise<void>;
+  playTrack: (track: YouTubeTrack, optionsOrQueue?: PlayTrackOptions | YouTubeTrack[]) => Promise<void>;
+  switchMode: (newMode: 'audio' | 'video') => void;
+  retryPlayback: () => void;
   playNext: () => Promise<void>;
   playPrevious: () => Promise<void>;
   nextTrack: () => Promise<void>; // Alias for playNext
@@ -70,6 +78,9 @@ interface MusicContextType {
   handleTrackEnded: () => void;
   handlePlayerPlay: () => void;
   handlePlayerPause: () => void;
+  handlePlayerReady: (player: any) => void;
+  handleAutoplayBlocked: () => void;
+  handlePlaybackError: (code: number) => void;
 }
 
 const MusicContext = createContext<MusicContextType | undefined>(undefined);
@@ -80,8 +91,13 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Core Playback State
   const [currentTrack, setCurrentTrack] = useState<YouTubeTrack | null>(null);
+  const [activePlayer, setActivePlayerState] = useState<ActivePlayerMode>('audio');
   const [queue, setQueue] = useState<YouTubeTrack[]>([]);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isUserInitiated, setIsUserInitiated] = useState<boolean>(false);
+  const [isPlayerReady, setIsPlayerReady] = useState<boolean>(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState<boolean>(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [volume, setVolumeState] = useState<number>(80);
@@ -99,17 +115,27 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Synchronized Refs to eliminate stale state in async callbacks & event handlers
   const currentTrackRef = useRef<YouTubeTrack | null>(null);
+  const activePlayerRef = useRef<ActivePlayerMode>('audio');
   const queueRef = useRef<YouTubeTrack[]>([]);
   const isPlayingRef = useRef<boolean>(false);
+  const isUserInitiatedRef = useRef<boolean>(false);
+  const isPlayerReadyRef = useRef<boolean>(false);
+  const autoplayBlockedRef = useRef<boolean>(false);
+  const currentTimeRef = useRef<number>(0);
+  const savedPositionRef = useRef<number>(0);
   const autoplayRef = useRef<boolean>(true);
   const repeatModeRef = useRef<RepeatMode>('off');
   const playbackModeRef = useRef<PlaybackMode>('audio');
-  const advancingRef = useRef<boolean>(false); // Section 11: Prevent multiple playNext() calls
+  const advancingRef = useRef<boolean>(false); // Prevent multiple playNext() calls
 
   // Keep refs in sync with state
   useEffect(() => {
     currentTrackRef.current = currentTrack;
   }, [currentTrack]);
+
+  useEffect(() => {
+    activePlayerRef.current = activePlayer;
+  }, [activePlayer]);
 
   useEffect(() => {
     queueRef.current = queue;
@@ -118,6 +144,48 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
+
+  useEffect(() => {
+    isUserInitiatedRef.current = isUserInitiated;
+  }, [isUserInitiated]);
+
+  useEffect(() => {
+    isPlayerReadyRef.current = isPlayerReady;
+  }, [isPlayerReady]);
+
+  useEffect(() => {
+    autoplayBlockedRef.current = autoplayBlocked;
+  }, [autoplayBlocked]);
+
+  useEffect(() => {
+    autoplayRef.current = autoplay;
+  }, [autoplay]);
+
+  useEffect(() => {
+    repeatModeRef.current = repeatMode;
+  }, [repeatMode]);
+
+  useEffect(() => {
+    playbackModeRef.current = playbackMode;
+  }, [playbackMode]);
+
+  // Periodic mobile playback diagnostic logger (requirement #19)
+  useEffect(() => {
+    if (!currentTrack) return;
+    const logInterval = setInterval(() => {
+      const vId = currentTrackRef.current?.videoId || currentTrackRef.current?.id;
+      if (!vId) return;
+      console.log('[MOBILE PLAYER]', {
+        videoId: vId,
+        activePlayer: activePlayerRef.current,
+        isPlaying: isPlayingRef.current,
+        playerReady: isPlayerReadyRef.current,
+        playerState: playerRef.current?.getPlayerState?.() ?? (isPlayingRef.current ? 1 : 2),
+        currentTime: currentTimeRef.current
+      });
+    }, 4000);
+    return () => clearInterval(logInterval);
+  }, [currentTrack]);
 
   useEffect(() => {
     autoplayRef.current = autoplay;
@@ -225,54 +293,82 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   // ==========================================
-  // Section 9: playTrack central function
+  // Central playTrack function
   // 1. Stop active player.
-  // 2. Set selected track.
-  // 3. Set currentTime = 0.
+  // 2. Set selected track & mode.
+  // 3. Set currentTime = startSeconds.
   // 4. Set active player.
   // 5. Load new videoId.
   // 6. Wait for player ready.
   // 7. Start playback.
   // ==========================================
   const playTrack = useCallback(
-    async (track: YouTubeTrack, newQueue?: YouTubeTrack[]) => {
+    async (track: YouTubeTrack, optionsOrQueue?: PlayTrackOptions | YouTubeTrack[]) => {
+      let options: PlayTrackOptions = {};
+      if (Array.isArray(optionsOrQueue)) {
+        options = { newQueue: optionsOrQueue };
+      } else if (optionsOrQueue) {
+        options = optionsOrQueue;
+      }
+
       const trackId = track.videoId || track.id;
       if (!trackId) return;
 
-      // 1. Stop active player
+      const userInitiated = options.userInitiated ?? true;
+      const startSec = options.startSeconds || 0;
+      const requestedMode = options.mode || playbackModeRef.current || 'audio';
+      const shouldAutoplay = options.autoplay !== false;
+
+      console.log('PLAY REQUESTED', {
+        trackId,
+        title: track.title,
+        mode: requestedMode,
+        startSec,
+        userInitiated,
+        shouldAutoplay
+      });
+
+      // 1. Stop active player safely
       await stopActivePlayer();
 
-      // 2. Set the selected track
+      // 2. Set the selected track and active mode
       setCurrentTrack(track);
       currentTrackRef.current = track;
+      setActivePlayerState(requestedMode);
+      activePlayerRef.current = requestedMode;
+      setPlaybackModeState(requestedMode);
+      playbackModeRef.current = requestedMode;
 
-      // 3. Set currentTime = 0
-      setCurrentTime(0);
+      // 3. Reset position & flags
+      setCurrentTime(startSec);
+      currentTimeRef.current = startSec;
       setDuration(track.durationSec || 210);
+      setIsUserInitiated(userInitiated);
+      isUserInitiatedRef.current = userInitiated;
+      setAutoplayBlocked(false);
+      autoplayBlockedRef.current = false;
+      setPlaybackError(null);
 
-      // Record to history
+      // Record to profile history
       recordToHistory(track);
 
       // Set playing and visible
-      setIsPlaying(true);
-      isPlayingRef.current = true;
+      setIsPlaying(shouldAutoplay);
+      isPlayingRef.current = shouldAutoplay;
       setIsMiniPlayerVisible(true);
 
       // Handle queue update
-      if (newQueue && newQueue.length > 0) {
-        // If track is in newQueue, upcoming queue should be items after track or all other items
-        const trackIdx = newQueue.findIndex(t => (t.videoId || t.id) === trackId);
+      if (options.newQueue && options.newQueue.length > 0) {
+        const trackIdx = options.newQueue.findIndex(t => (t.videoId || t.id) === trackId);
         let upcoming: YouTubeTrack[];
         if (trackIdx >= 0) {
-          // Take all songs after this track
-          upcoming = newQueue.slice(trackIdx + 1);
+          upcoming = options.newQueue.slice(trackIdx + 1);
         } else {
-          upcoming = newQueue.filter(t => (t.videoId || t.id) !== trackId);
+          upcoming = options.newQueue.filter(t => (t.videoId || t.id) !== trackId);
         }
         setQueue(upcoming);
         queueRef.current = upcoming;
       } else {
-        // If playing from existing queue or direct track, remove track from upcoming queue
         setQueue(prev => {
           const filtered = prev.filter(t => (t.videoId || t.id) !== trackId);
           queueRef.current = filtered;
@@ -282,11 +378,62 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       // 4, 5, 6, 7: Command player to load new videoId and play
       if (playerRef.current) {
-        playerRef.current.loadVideo(trackId, true);
+        playerRef.current.loadVideo(trackId, shouldAutoplay, startSec);
       }
     },
     [stopActivePlayer, recordToHistory]
   );
+
+  // Switch between audio and video modes while preserving position
+  const switchMode = useCallback((newMode: 'audio' | 'video') => {
+    const current = currentTrackRef.current;
+    const currentPos = currentTimeRef.current;
+    const trackId = current?.videoId || current?.id;
+
+    console.log(`[MOBILE PLAYER] Switch mode: ${activePlayerRef.current} -> ${newMode} at ${currentPos}s`);
+
+    // 1. Pause current player
+    if (playerRef.current) {
+      playerRef.current.pause();
+    }
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+
+    // 2. Save current position
+    savedPositionRef.current = currentPos;
+
+    // 3. Update active player and playback mode
+    setActivePlayerState(newMode);
+    activePlayerRef.current = newMode;
+    setPlaybackModeState(newMode);
+    playbackModeRef.current = newMode;
+    setAutoplayBlocked(false);
+    autoplayBlockedRef.current = false;
+    setPlaybackError(null);
+
+    // 4. Seek to saved position & load with autoplay
+    if (trackId && playerRef.current) {
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+      playerRef.current.loadVideo(trackId, true, currentPos);
+    }
+  }, []);
+
+  // Explicit user-initiated retry playback (for "Tap to Play" or resume after block)
+  const retryPlayback = useCallback(() => {
+    console.log('PLAY REQUESTED (manual retry gesture)');
+    setIsUserInitiated(true);
+    isUserInitiatedRef.current = true;
+    setAutoplayBlocked(false);
+    autoplayBlockedRef.current = false;
+    setPlaybackError(null);
+    setIsPlaying(true);
+    isPlayingRef.current = true;
+
+    if (playerRef.current) {
+      playerRef.current.play();
+    }
+  }, []);
 
   // ==========================================
   // Section 2 & 7: Central playNext() function
@@ -639,6 +786,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const syncProgress = useCallback((curr: number, dur: number) => {
     setCurrentTime(curr);
+    currentTimeRef.current = curr;
     if (dur > 0) {
       setDuration(dur);
     }
@@ -647,6 +795,9 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const handlePlayerPlay = useCallback(() => {
     setIsPlaying(true);
     isPlayingRef.current = true;
+    setAutoplayBlocked(false);
+    autoplayBlockedRef.current = false;
+    setPlaybackError(null);
   }, []);
 
   const handlePlayerPause = useCallback(() => {
@@ -654,11 +805,39 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     isPlayingRef.current = false;
   }, []);
 
+  const handlePlayerReady = useCallback((_player: any) => {
+    setIsPlayerReady(true);
+    isPlayerReadyRef.current = true;
+  }, []);
+
+  const handleAutoplayBlocked = useCallback(() => {
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+    setAutoplayBlocked(true);
+    autoplayBlockedRef.current = true;
+  }, []);
+
+  const handlePlaybackError = useCallback((code: number) => {
+    console.warn('Playback error code:', code);
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+    if ([100, 101, 150].includes(code)) {
+      setPlaybackError('This track is unavailable or restricted by YouTube.');
+    } else {
+      setPlaybackError('Playback error. Tap to retry.');
+    }
+  }, []);
+
   return (
     <MusicContext.Provider
       value={{
         currentTrack,
+        activePlayer,
         isPlaying,
+        isUserInitiated,
+        isPlayerReady,
+        autoplayBlocked,
+        playbackError,
         queue,
         currentQueueIndex: 0,
         currentTime,
@@ -674,6 +853,8 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         recentlyPlayed,
         favorites,
         playTrack,
+        switchMode,
+        retryPlayback,
         playNext,
         playPrevious,
         nextTrack: playNext,
@@ -706,7 +887,10 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         syncProgress,
         handleTrackEnded,
         handlePlayerPlay,
-        handlePlayerPause
+        handlePlayerPause,
+        handlePlayerReady,
+        handleAutoplayBlocked,
+        handlePlaybackError
       }}
     >
       {children}

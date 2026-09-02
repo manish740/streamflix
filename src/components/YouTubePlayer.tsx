@@ -74,6 +74,7 @@ export interface YouTubePlayerProps {
   onProgress?: (currentTime: number, duration: number) => void;
   onError?: (error: number) => void;
   onReady?: (player: YTPlayer) => void;
+  onAutoplayBlocked?: () => void;
 }
 
 export interface YouTubePlayerRef {
@@ -87,7 +88,8 @@ export interface YouTubePlayerRef {
   getCurrentTime: () => number;
   getDuration: () => number;
   getPlayer: () => YTPlayer | null;
-  loadVideo: (videoId: string, shouldAutoplay?: boolean) => void;
+  getPlayerState: () => number;
+  loadVideo: (videoId: string, shouldAutoplay?: boolean, startSeconds?: number) => void;
   isReady: () => boolean;
 }
 
@@ -104,7 +106,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
       onEnded,
       onProgress,
       onError,
-      onReady
+      onReady,
+      onAutoplayBlocked
     },
     ref
   ) => {
@@ -112,7 +115,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
     const playerInstanceRef = useRef<YTPlayer | null>(null);
     const isPlayerReadyRef = useRef<boolean>(false);
     const currentVideoIdRef = useRef<string>(videoId);
-    const pendingLoadRef = useRef<{ videoId: string; autoplay: boolean } | null>(null);
+    const pendingLoadRef = useRef<{ videoId: string; autoplay: boolean; startSeconds?: number } | null>(null);
 
     const [isApiReady, setIsApiReady] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -125,6 +128,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
     const onProgressRef = useRef(onProgress);
     const onErrorRef = useRef(onError);
     const onReadyRef = useRef(onReady);
+    const onAutoplayBlockedRef = useRef(onAutoplayBlocked);
     const autoplayRef = useRef(autoplay);
 
     useEffect(() => {
@@ -134,6 +138,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
       onProgressRef.current = onProgress;
       onErrorRef.current = onError;
       onReadyRef.current = onReady;
+      onAutoplayBlockedRef.current = onAutoplayBlocked;
       autoplayRef.current = autoplay;
     });
 
@@ -164,25 +169,42 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
     }, [clearProgressInterval]);
 
     // Central loadVideo method
-    const loadVideo = useCallback((newVideoId: string, shouldAutoplay = true) => {
+    const loadVideo = useCallback((newVideoId: string, shouldAutoplay = true, startSeconds = 0) => {
       if (!newVideoId) return;
       currentVideoIdRef.current = newVideoId;
 
       if (playerInstanceRef.current && isPlayerReadyRef.current) {
         try {
           setIsLoading(true);
+          console.log('PLAY REQUESTED', { videoId: newVideoId, shouldAutoplay, startSeconds });
           if (shouldAutoplay) {
-            playerInstanceRef.current.loadVideoById(newVideoId, 0);
-            playerInstanceRef.current.seekTo(0, true);
+            playerInstanceRef.current.loadVideoById(newVideoId, startSeconds);
+            playerInstanceRef.current.seekTo(startSeconds, true);
             playerInstanceRef.current.playVideo();
+
+            // Mobile autoplay detection: if not playing or buffering after delay, notify blocked
+            setTimeout(() => {
+              if (playerInstanceRef.current) {
+                try {
+                  const state = playerInstanceRef.current.getPlayerState?.();
+                  if (state === 2 || state === 5 || state === -1) {
+                    console.log('PLAY BLOCKED');
+                    setIsLoading(false);
+                    onAutoplayBlockedRef.current?.();
+                  }
+                } catch {
+                  // Ignore
+                }
+              }
+            }, 1200);
           } else {
-            playerInstanceRef.current.cueVideoById(newVideoId, 0);
+            playerInstanceRef.current.cueVideoById(newVideoId, startSeconds);
           }
         } catch (err) {
           console.warn('loadVideoById caught error:', err);
         }
       } else {
-        pendingLoadRef.current = { videoId: newVideoId, autoplay: shouldAutoplay };
+        pendingLoadRef.current = { videoId: newVideoId, autoplay: shouldAutoplay, startSeconds };
       }
     }, []);
 
@@ -191,6 +213,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
       play: () => {
         if (playerInstanceRef.current) {
           try {
+            console.log('PLAY REQUESTED');
             playerInstanceRef.current.playVideo();
           } catch (err) {
             console.warn('playVideo failed:', err);
@@ -263,6 +286,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
           return playerInstanceRef.current?.getDuration() || 0;
         } catch {
           return 0;
+        }
+      },
+      getPlayerState: () => {
+        try {
+          return playerInstanceRef.current?.getPlayerState?.() ?? -1;
+        } catch {
+          return -1;
         }
       },
       getPlayer: () => playerInstanceRef.current,
@@ -342,6 +372,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
           : undefined;
 
       try {
+        console.log('PLAYER CREATED', { videoId, containerId: containerId.current });
         const player = new window.YT.Player(containerId.current, {
           videoId,
           playerVars: {
@@ -356,31 +387,60 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
           },
           events: {
             onReady: (event: YTPlayerEvent) => {
+              console.log('PLAYER READY', { videoId });
               playerInstanceRef.current = event.target;
               isPlayerReadyRef.current = true;
               setIsLoading(false);
 
               if (pendingLoadRef.current) {
-                const { videoId: pId, autoplay: pAutoplay } = pendingLoadRef.current;
+                const { videoId: pId, autoplay: pAutoplay, startSeconds: pStart } = pendingLoadRef.current;
                 pendingLoadRef.current = null;
                 currentVideoIdRef.current = pId;
                 try {
                   if (pAutoplay) {
-                    event.target.loadVideoById(pId, 0);
-                    event.target.seekTo(0, true);
+                    console.log('PLAY REQUESTED', { videoId: pId, startSeconds: pStart });
+                    event.target.loadVideoById(pId, pStart || 0);
+                    event.target.seekTo(pStart || 0, true);
                     event.target.playVideo();
+
+                    // Check if mobile blocked autoplay
+                    setTimeout(() => {
+                      try {
+                        const st = event.target.getPlayerState?.();
+                        if (st === 2 || st === 5 || st === -1) {
+                          console.log('PLAY BLOCKED');
+                          onAutoplayBlockedRef.current?.();
+                        }
+                      } catch {
+                        // Ignore
+                      }
+                    }, 1200);
                   } else {
-                    event.target.cueVideoById(pId, 0);
+                    event.target.cueVideoById(pId, pStart || 0);
                   }
                 } catch (e) {
                   console.warn('Failed executing pending load:', e);
                 }
               } else if (autoplayRef.current) {
                 try {
+                  console.log('PLAY REQUESTED', { videoId });
                   event.target.seekTo(0, true);
                   event.target.playVideo();
+                  setTimeout(() => {
+                    try {
+                      const st = event.target.getPlayerState?.();
+                      if (st === 2 || st === 5 || st === -1) {
+                        console.log('PLAY BLOCKED');
+                        onAutoplayBlockedRef.current?.();
+                      }
+                    } catch {
+                      // Ignore
+                    }
+                  }, 1200);
                 } catch (e) {
                   console.warn('Autoplay failed on player onReady:', e);
+                  console.log('PLAY BLOCKED');
+                  onAutoplayBlockedRef.current?.();
                 }
               }
 
@@ -393,11 +453,12 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
               }
             },
             onStateChange: (event: YTPlayerStateChangeEvent) => {
-              console.log('YouTube state:', event.data);
               const state = event.data;
+              console.log('PLAYER STATE', state);
 
               // 1 = PLAYING
               if (state === 1 || (window.YT?.PlayerState && state === window.YT.PlayerState.PLAYING)) {
+                console.log('PLAY STARTED');
                 setIsLoading(false);
                 startProgressInterval();
                 if (onPlayRef.current) {
@@ -421,6 +482,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
               }
               // 0 = ENDED
               else if (state === 0 || (window.YT?.PlayerState && state === window.YT.PlayerState.ENDED)) {
+                console.log('PLAYER ENDED');
                 clearProgressInterval();
                 if (onEndedRef.current) {
                   try {
@@ -438,7 +500,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
                     event.target.seekTo(0, true);
                     event.target.playVideo();
                   } catch {
-                    // Autoplay requires user gesture on mobile
+                    console.log('PLAY BLOCKED');
+                    onAutoplayBlockedRef.current?.();
                   }
                 }
               }
@@ -482,6 +545,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
     // Clean up on component unmount
     useEffect(() => {
       return () => {
+        console.log('PLAYER DESTROYED');
         clearProgressInterval();
         if (playerInstanceRef.current) {
           try {

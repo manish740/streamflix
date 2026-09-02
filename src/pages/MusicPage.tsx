@@ -39,7 +39,8 @@ export const MusicPage: React.FC = () => {
     addToQueue,
     queue,
     playbackMode,
-    setPlaybackMode
+    setPlaybackMode,
+    switchMode
   } = useMusic();
 
   const isVideoMode =
@@ -47,7 +48,7 @@ export const MusicPage: React.FC = () => {
     (playbackMode === 'video' && location.pathname !== '/music/audio');
 
   const handleModeChange = (mode: 'audio' | 'video') => {
-    setPlaybackMode(mode);
+    switchMode(mode);
     if (mode === 'video') {
       navigate('/music/video');
     } else {

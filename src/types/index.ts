@@ -132,6 +132,26 @@ export interface YouTubeTrack {
   isFavorite?: boolean;
 }
 
+export type ActivePlayerMode = 'audio' | 'video' | null;
+
+export interface PlaybackState {
+  currentTrack: YouTubeTrack | null;
+  activePlayer: 'audio' | 'video' | null;
+  isPlaying: boolean;
+  isUserInitiated: boolean;
+  currentTime: number;
+  volume: number;
+  queue: YouTubeTrack[];
+}
+
+export interface PlayTrackOptions {
+  newQueue?: YouTubeTrack[];
+  userInitiated?: boolean;
+  startSeconds?: number;
+  mode?: 'audio' | 'video';
+  autoplay?: boolean;
+}
+
 export interface YouTubePlaylist {
   id: string;
   title: string;
