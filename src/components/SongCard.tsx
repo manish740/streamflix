@@ -24,10 +24,12 @@ export const SongCard: React.FC<SongCardProps> = ({ track, rank, featured }) => 
 
   const [isHovered, setIsHovered] = useState(false);
 
-  const isCurrentTrack = currentTrack?.id === track.id;
+  const trackId = track.videoId || track.id;
+  const currentId = currentTrack?.videoId || currentTrack?.id;
+  const isCurrentTrack = currentId === trackId;
   const isPlayingThis = isCurrentTrack && isPlaying;
-  const inQueue = queue.some(t => t.id === track.id);
-  const fav = isFavorite(track.id);
+  const inQueue = queue.some(t => (t.videoId || t.id) === trackId);
+  const fav = isFavorite(trackId);
 
   const handlePlayClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -45,12 +47,12 @@ export const SongCard: React.FC<SongCardProps> = ({ track, rank, featured }) => 
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    toggleFavorite(track.id);
+    toggleFavorite(trackId);
   };
 
   return (
     <div
-      id={`song-card-${track.id}`}
+      id={`song-card-${trackId}`}
       onClick={handlePlayClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -63,7 +65,7 @@ export const SongCard: React.FC<SongCardProps> = ({ track, rank, featured }) => 
       {/* Thumbnail Aspect 16:9 */}
       <div className="relative aspect-video w-full overflow-hidden bg-black">
         <img
-          src={track.thumbnailUrl}
+          src={track.thumbnailUrl || track.thumbnail}
           alt={track.title}
           className={`w-full h-full object-cover transition-transform duration-500 ${
             isHovered ? 'scale-108' : 'scale-100'

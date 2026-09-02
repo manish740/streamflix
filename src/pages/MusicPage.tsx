@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useMusic } from '../context/MusicContext';
 import { useWatchlist } from '../context/WatchlistContext';
 import { YouTubeService, CURATED_MUSIC_TRACKS } from '../services/youtubeService';
@@ -14,6 +15,7 @@ import {
   Flame,
   Music,
   Headphones,
+  Video,
   Radio,
   ListMusic,
   RefreshCw,
@@ -24,6 +26,9 @@ import {
 } from 'lucide-react';
 
 export const MusicPage: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const {
     playTrack,
     currentTrack,
@@ -32,8 +37,23 @@ export const MusicPage: React.FC = () => {
     clearRecentlyPlayed,
     toggleQueue,
     addToQueue,
-    queue
+    queue,
+    playbackMode,
+    setPlaybackMode
   } = useMusic();
+
+  const isVideoMode =
+    location.pathname === '/music/video' ||
+    (playbackMode === 'video' && location.pathname !== '/music/audio');
+
+  const handleModeChange = (mode: 'audio' | 'video') => {
+    setPlaybackMode(mode);
+    if (mode === 'video') {
+      navigate('/music/video');
+    } else {
+      navigate('/music/audio');
+    }
+  };
 
   const { showToast } = useWatchlist();
 
@@ -232,8 +252,34 @@ export const MusicPage: React.FC = () => {
             </h1>
           </div>
 
-          {/* Quick Actions */}
-          <div className="flex items-center gap-3">
+          {/* Quick Actions & Mode Switcher */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Audio / Video Switcher */}
+            <div className="flex items-center gap-1 bg-zinc-900/90 p-1 rounded-xl border border-zinc-800">
+              <button
+                onClick={() => handleModeChange('audio')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  !isVideoMode
+                    ? 'bg-white text-black shadow-md'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                <Headphones className="w-3.5 h-3.5" />
+                <span>Audio</span>
+              </button>
+              <button
+                onClick={() => handleModeChange('video')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                  isVideoMode
+                    ? 'bg-[#E50914] text-white shadow-md'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                <Video className="w-3.5 h-3.5" />
+                <span>Video</span>
+              </button>
+            </div>
+
             <button
               id="music-queue-toggle-btn"
               onClick={toggleQueue}
@@ -244,6 +290,49 @@ export const MusicPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Video Mode Player Anchor Section */}
+        {isVideoMode && (
+          <div className="space-y-3 bg-zinc-950/80 p-4 sm:p-6 rounded-2xl border border-zinc-800 animate-fade-in shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <Video className="w-5 h-5 text-[#E50914] shrink-0" />
+                <h2 className="font-display text-base sm:text-lg font-bold text-white">Video Mode</h2>
+                {currentTrack && (
+                  <span className="text-xs text-zinc-400 font-medium truncate max-w-xs sm:max-w-md">
+                    — {currentTrack.title}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => handleModeChange('audio')}
+                className="px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white hover:bg-zinc-800 flex items-center gap-1.5 transition-colors shrink-0"
+              >
+                <Headphones className="w-3.5 h-3.5" />
+                <span>Switch to Audio</span>
+              </button>
+            </div>
+
+            {/* In-page Video Anchor: PersistentPlayerHost anchors over this exact rect */}
+            <div
+              id="music-video-anchor"
+              className="relative w-full aspect-video max-w-4xl mx-auto rounded-xl overflow-hidden bg-black shadow-2xl border border-zinc-800/80 flex items-center justify-center"
+            >
+              {!currentTrack ? (
+                <div className="flex flex-col items-center justify-center p-6 text-center text-zinc-500">
+                  <Video className="w-12 h-12 mb-2 stroke-[1.5] text-zinc-600" />
+                  <p className="text-sm font-semibold text-zinc-300">Select any track to play in Video Mode</p>
+                  <p className="text-xs text-zinc-500 mt-1">Audio and Video share the exact same playback queue.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center text-zinc-500">
+                  <Disc3 className="w-10 h-10 animate-spin text-[#E50914] mb-2" />
+                  <span className="text-xs font-mono">Loading Video Mode...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Search Bar Input with Real-time feedback */}
         <div className="relative max-w-4xl">

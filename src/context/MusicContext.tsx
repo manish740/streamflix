@@ -4,6 +4,9 @@ import { CURATED_MUSIC_TRACKS } from '../services/youtubeService';
 import { useAuth } from './AuthContext';
 import { YouTubePlayerRef } from '../components/YouTubePlayer';
 
+export type RepeatMode = 'off' | 'one' | 'all';
+export type PlaybackMode = 'audio' | 'video';
+
 interface MusicContextType {
   currentTrack: YouTubeTrack | null;
   isPlaying: boolean;
@@ -13,26 +16,40 @@ interface MusicContextType {
   duration: number;
   volume: number;
   isMuted: boolean;
+  autoplay: boolean;
+  repeatMode: RepeatMode;
+  playbackMode: PlaybackMode;
   isMiniPlayerVisible: boolean;
   isExpandedModalOpen: boolean;
   isQueueOpen: boolean;
   recentlyPlayed: YouTubeTrack[];
   favorites: string[];
 
-  // Player controls
-  playTrack: (track: YouTubeTrack, newQueue?: YouTubeTrack[]) => void;
-  togglePlay: () => void;
+  // Central Player & Lifecycle controls
+  playTrack: (track: YouTubeTrack, newQueue?: YouTubeTrack[]) => Promise<void>;
+  playNext: () => Promise<void>;
+  playPrevious: () => Promise<void>;
+  nextTrack: () => Promise<void>; // Alias for playNext
+  previousTrack: () => Promise<void>; // Alias for playPrevious
   pauseTrack: () => void;
   resumeTrack: () => void;
-  nextTrack: () => void;
-  previousTrack: () => void;
+  stopTrack: () => Promise<void>;
+  togglePlay: () => void;
   seekTo: (seconds: number) => void;
   setVolume: (level: number) => void;
   toggleMute: () => void;
+
+  // Queue manipulation
   addToQueue: (track: YouTubeTrack) => void;
   removeFromQueue: (index: number) => void;
   clearQueue: () => void;
   reorderQueue: (startIndex: number, endIndex: number) => void;
+
+  // Settings & Modes
+  toggleAutoplay: () => void;
+  toggleRepeat: () => void;
+  setPlaybackMode: (mode: PlaybackMode) => void;
+  togglePlaybackMode: () => void;
 
   // View state controls
   closeMiniPlayer: () => void;
@@ -47,7 +64,7 @@ interface MusicContextType {
   isFavorite: (trackId: string) => boolean;
   clearRecentlyPlayed: () => void;
 
-  // Player ref linking
+  // Player ref linking & events
   playerRef: React.RefObject<YouTubePlayerRef | null>;
   syncProgress: (curr: number, dur: number) => void;
   handleTrackEnded: () => void;
@@ -61,19 +78,60 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const { activeProfile } = useAuth();
   const playerRef = useRef<YouTubePlayerRef | null>(null);
 
+  // Core Playback State
   const [currentTrack, setCurrentTrack] = useState<YouTubeTrack | null>(null);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [queue, setQueue] = useState<YouTubeTrack[]>([]);
-  const [currentQueueIndex, setCurrentQueueIndex] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [volume, setVolumeState] = useState<number>(80);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+
+  // Autoplay & Repeat & Mode
+  const [autoplay, setAutoplay] = useState<boolean>(true);
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
+  const [playbackMode, setPlaybackModeState] = useState<PlaybackMode>('audio');
+
+  // UI Visibility States
   const [isMiniPlayerVisible, setIsMiniPlayerVisible] = useState<boolean>(false);
   const [isExpandedModalOpen, setIsExpandedModalOpen] = useState<boolean>(false);
   const [isQueueOpen, setIsQueueOpen] = useState<boolean>(false);
 
-  // Profile-specific recently played storage key
+  // Synchronized Refs to eliminate stale state in async callbacks & event handlers
+  const currentTrackRef = useRef<YouTubeTrack | null>(null);
+  const queueRef = useRef<YouTubeTrack[]>([]);
+  const isPlayingRef = useRef<boolean>(false);
+  const autoplayRef = useRef<boolean>(true);
+  const repeatModeRef = useRef<RepeatMode>('off');
+  const playbackModeRef = useRef<PlaybackMode>('audio');
+  const advancingRef = useRef<boolean>(false); // Section 11: Prevent multiple playNext() calls
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    currentTrackRef.current = currentTrack;
+  }, [currentTrack]);
+
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    autoplayRef.current = autoplay;
+  }, [autoplay]);
+
+  useEffect(() => {
+    repeatModeRef.current = repeatMode;
+  }, [repeatMode]);
+
+  useEffect(() => {
+    playbackModeRef.current = playbackMode;
+  }, [playbackMode]);
+
+  // Profile-specific storage keys
   const profileId = activeProfile?.id || 'default';
   const recentStorageKey = `streamflix_music_recent_${profileId}`;
   const favsStorageKey = `streamflix_music_favs_${profileId}`;
@@ -85,9 +143,13 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch {
       // Ignore
     }
-    // Default initial recently played for discovery
     return CURATED_MUSIC_TRACKS.slice(0, 5);
   });
+
+  const recentlyPlayedRef = useRef<YouTubeTrack[]>(recentlyPlayed);
+  useEffect(() => {
+    recentlyPlayedRef.current = recentlyPlayed;
+  }, [recentlyPlayed]);
 
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
@@ -102,16 +164,19 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Re-sync storage when profile changes
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(`streamflix_music_recent_${profileId}`);
-      if (saved) {
-        setRecentlyPlayed(JSON.parse(saved));
+      const savedRecent = localStorage.getItem(`streamflix_music_recent_${profileId}`);
+      if (savedRecent) {
+        const parsed = JSON.parse(savedRecent);
+        setRecentlyPlayed(parsed);
+        recentlyPlayedRef.current = parsed;
       } else {
         setRecentlyPlayed(CURATED_MUSIC_TRACKS.slice(0, 5));
+        recentlyPlayedRef.current = CURATED_MUSIC_TRACKS.slice(0, 5);
       }
 
-      const favs = localStorage.getItem(`streamflix_music_favs_${profileId}`);
-      if (favs) {
-        setFavorites(JSON.parse(favs));
+      const savedFavs = localStorage.getItem(`streamflix_music_favs_${profileId}`);
+      if (savedFavs) {
+        setFavorites(JSON.parse(savedFavs));
       } else {
         setFavorites(['4NRXx6U8ABQ', 'UDVtMYqUAyw']);
       }
@@ -120,7 +185,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [profileId]);
 
-  // Persist recent items
+  // Persist history & favorites
   useEffect(() => {
     try {
       localStorage.setItem(recentStorageKey, JSON.stringify(recentlyPlayed));
@@ -129,7 +194,6 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [recentlyPlayed, recentStorageKey]);
 
-  // Persist favorites
   useEffect(() => {
     try {
       localStorage.setItem(favsStorageKey, JSON.stringify(favorites));
@@ -140,48 +204,272 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Record playback to profile recently played history
   const recordToHistory = useCallback((track: YouTubeTrack) => {
+    const trackId = track.videoId || track.id;
     setRecentlyPlayed(prev => {
-      const filtered = prev.filter(t => t.id !== track.id);
-      return [track, ...filtered].slice(0, 30);
+      const filtered = prev.filter(t => (t.videoId || t.id) !== trackId);
+      const updated = [track, ...filtered].slice(0, 30);
+      recentlyPlayedRef.current = updated;
+      return updated;
     });
   }, []);
 
-  // Play a specific track
+  // Helper: Stop active player safely
+  const stopActivePlayer = useCallback(async () => {
+    try {
+      if (playerRef.current) {
+        playerRef.current.pause();
+      }
+    } catch (err) {
+      console.warn('Could not stop active player:', err);
+    }
+  }, []);
+
+  // ==========================================
+  // Section 9: playTrack central function
+  // 1. Stop active player.
+  // 2. Set selected track.
+  // 3. Set currentTime = 0.
+  // 4. Set active player.
+  // 5. Load new videoId.
+  // 6. Wait for player ready.
+  // 7. Start playback.
+  // ==========================================
   const playTrack = useCallback(
-    (track: YouTubeTrack, newQueue?: YouTubeTrack[]) => {
+    async (track: YouTubeTrack, newQueue?: YouTubeTrack[]) => {
+      const trackId = track.videoId || track.id;
+      if (!trackId) return;
+
+      // 1. Stop active player
+      await stopActivePlayer();
+
+      // 2. Set the selected track
       setCurrentTrack(track);
-      setIsPlaying(true);
-      setIsMiniPlayerVisible(true);
+      currentTrackRef.current = track;
+
+      // 3. Set currentTime = 0
       setCurrentTime(0);
       setDuration(track.durationSec || 210);
 
+      // Record to history
       recordToHistory(track);
 
+      // Set playing and visible
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+      setIsMiniPlayerVisible(true);
+
+      // Handle queue update
       if (newQueue && newQueue.length > 0) {
-        setQueue(newQueue);
-        const idx = newQueue.findIndex(t => t.id === track.id);
-        setCurrentQueueIndex(idx >= 0 ? idx : 0);
+        // If track is in newQueue, upcoming queue should be items after track or all other items
+        const trackIdx = newQueue.findIndex(t => (t.videoId || t.id) === trackId);
+        let upcoming: YouTubeTrack[];
+        if (trackIdx >= 0) {
+          // Take all songs after this track
+          upcoming = newQueue.slice(trackIdx + 1);
+        } else {
+          upcoming = newQueue.filter(t => (t.videoId || t.id) !== trackId);
+        }
+        setQueue(upcoming);
+        queueRef.current = upcoming;
       } else {
-        // If track is in current queue, update index; otherwise add as next
+        // If playing from existing queue or direct track, remove track from upcoming queue
         setQueue(prev => {
-          const idx = prev.findIndex(t => t.id === track.id);
-          if (idx >= 0) {
-            setCurrentQueueIndex(idx);
-            return prev;
-          }
-          const updated = [...prev, track];
-          setCurrentQueueIndex(updated.length - 1);
-          return updated;
+          const filtered = prev.filter(t => (t.videoId || t.id) !== trackId);
+          queueRef.current = filtered;
+          return filtered;
         });
       }
 
-      // Command player if mounted
+      // 4, 5, 6, 7: Command player to load new videoId and play
       if (playerRef.current) {
-        playerRef.current.play();
+        playerRef.current.loadVideo(trackId, true);
       }
     },
-    [recordToHistory]
+    [stopActivePlayer, recordToHistory]
   );
+
+  // ==========================================
+  // Section 2 & 7: Central playNext() function
+  // Single source of truth for advancing the queue.
+  // ==========================================
+  const playNext = useCallback(async () => {
+    const current = currentTrackRef.current;
+    const currentQ = queueRef.current;
+
+    console.log('Current track ended:', current);
+    console.log('Queue:', currentQ);
+
+    // Section 16: Repeat ONE mode - replay current track from second 0
+    if (repeatModeRef.current === 'one' && current) {
+      const currentId = current.videoId || current.id;
+      console.log('Repeat ONE active. Replaying:', current.title);
+      await stopActivePlayer();
+      setCurrentTime(0);
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+      if (playerRef.current) {
+        playerRef.current.seekTo(0);
+        playerRef.current.play();
+      }
+      return;
+    }
+
+    // Section 1: When current song finishes, next queued song becomes current
+    if (currentQ.length > 0) {
+      const nextTrack = currentQ[0];
+      const remainingQueue = currentQ.slice(1);
+
+      console.log('Playing next:', nextTrack);
+
+      // Section 15: Do not reload the current song unless repeat is explicitly enabled
+      const currentId = current?.videoId || current?.id;
+      const nextId = nextTrack.videoId || nextTrack.id;
+      if (currentId && nextId === currentId && repeatModeRef.current === 'off') {
+        if (remainingQueue.length > 0) {
+          queueRef.current = remainingQueue;
+          setQueue(remainingQueue);
+          // Recursively advance to following item
+          return playNext();
+        }
+      }
+
+      // 1. Stop active player
+      await stopActivePlayer();
+
+      // 2. Advance queue
+      setQueue(remainingQueue);
+      queueRef.current = remainingQueue;
+
+      // 3. Set next track
+      setCurrentTrack(nextTrack);
+      currentTrackRef.current = nextTrack;
+      setCurrentTime(0);
+      setDuration(nextTrack.durationSec || 210);
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+      recordToHistory(nextTrack);
+
+      // 4. Command player to load next videoId and play automatically
+      if (playerRef.current) {
+        playerRef.current.loadVideo(nextId, true);
+      }
+      return;
+    }
+
+    // Queue is empty: check Repeat ALL
+    if (repeatModeRef.current === 'all' && recentlyPlayedRef.current.length > 0) {
+      const currentId = current?.videoId || current?.id;
+      const candidate =
+        recentlyPlayedRef.current.find(t => (t.videoId || t.id) !== currentId) ||
+        recentlyPlayedRef.current[0];
+      if (candidate) {
+        console.log('Repeat ALL active. Looping to:', candidate.title);
+        await playTrack(candidate);
+        return;
+      }
+    }
+
+    // Section 14: Respect existing autoplay setting when queue is empty
+    if (autoplayRef.current) {
+      console.log('Queue empty & Autoplay ON. Finding recommended track...');
+      const currentId = current?.videoId || current?.id;
+      const sameCategoryOrArtist = CURATED_MUSIC_TRACKS.filter(
+        t =>
+          t.id !== currentId &&
+          (t.artist === current?.artist ||
+            t.genre === current?.genre ||
+            t.category === current?.category)
+      );
+      const pool =
+        sameCategoryOrArtist.length > 0
+          ? sameCategoryOrArtist
+          : CURATED_MUSIC_TRACKS.filter(t => t.id !== currentId);
+
+      if (pool.length > 0) {
+        const randomIndex = Math.floor(Math.random() * pool.length);
+        const recommendedTrack = pool[randomIndex];
+        console.log('Autoplay recommending:', recommendedTrack.title);
+        await playTrack(recommendedTrack);
+        return;
+      }
+    }
+
+    // Autoplay OFF and queue empty: stop playback
+    console.log('Queue empty and Autoplay is OFF. Playback stopped.');
+    await stopActivePlayer();
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+  }, [stopActivePlayer, playTrack, recordToHistory]);
+
+  // ==========================================
+  // Section 11: Prevent multiple playNext() calls with guard
+  // ==========================================
+  const handleTrackEnded = useCallback(async () => {
+    if (advancingRef.current) {
+      console.log('Track ended event suppressed by advancingRef guard');
+      return;
+    }
+
+    advancingRef.current = true;
+    try {
+      await playNext();
+    } catch (err) {
+      console.error('Error during playNext:', err);
+    } finally {
+      // Release guard after brief debounce to ensure player transition settled
+      setTimeout(() => {
+        advancingRef.current = false;
+      }, 600);
+    }
+  }, [playNext]);
+
+  // Previous track handler
+  const playPrevious = useCallback(async () => {
+    // If past 4 seconds, restart current track
+    if (currentTime > 4 && currentTrack) {
+      setCurrentTime(0);
+      if (playerRef.current) {
+        playerRef.current.seekTo(0);
+      }
+      return;
+    }
+
+    // Try recent history
+    const currentId = currentTrack?.videoId || currentTrack?.id;
+    const recent = recentlyPlayedRef.current;
+    const prev = recent.find(t => (t.videoId || t.id) !== currentId);
+    if (prev) {
+      await playTrack(prev);
+    } else if (currentTrack) {
+      setCurrentTime(0);
+      if (playerRef.current) {
+        playerRef.current.seekTo(0);
+      }
+    }
+  }, [currentTime, currentTrack, playTrack]);
+
+  const pauseTrack = useCallback(() => {
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+    if (playerRef.current) {
+      playerRef.current.pause();
+    }
+  }, []);
+
+  const resumeTrack = useCallback(() => {
+    setIsPlaying(true);
+    isPlayingRef.current = true;
+    if (playerRef.current) {
+      playerRef.current.play();
+    }
+  }, []);
+
+  const stopTrack = useCallback(async () => {
+    await stopActivePlayer();
+    setIsPlaying(false);
+    isPlayingRef.current = false;
+    setCurrentTime(0);
+  }, [stopActivePlayer]);
 
   const togglePlay = useCallback(() => {
     if (!currentTrack) {
@@ -189,6 +477,8 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         playTrack(queue[0]);
       } else if (recentlyPlayed.length > 0) {
         playTrack(recentlyPlayed[0]);
+      } else if (CURATED_MUSIC_TRACKS.length > 0) {
+        playTrack(CURATED_MUSIC_TRACKS[0]);
       }
       return;
     }
@@ -198,54 +488,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else {
       resumeTrack();
     }
-  }, [currentTrack, isPlaying, queue, recentlyPlayed, playTrack]);
-
-  const pauseTrack = useCallback(() => {
-    setIsPlaying(false);
-    if (playerRef.current) {
-      playerRef.current.pause();
-    }
-  }, []);
-
-  const resumeTrack = useCallback(() => {
-    setIsPlaying(true);
-    if (playerRef.current) {
-      playerRef.current.play();
-    }
-  }, []);
-
-  const nextTrack = useCallback(() => {
-    if (queue.length === 0) return;
-    const nextIndex = (currentQueueIndex + 1) % queue.length;
-    setCurrentQueueIndex(nextIndex);
-    const track = queue[nextIndex];
-    if (track) {
-      setCurrentTrack(track);
-      setIsPlaying(true);
-      setCurrentTime(0);
-      setDuration(track.durationSec || 210);
-      recordToHistory(track);
-    }
-  }, [queue, currentQueueIndex, recordToHistory]);
-
-  const previousTrack = useCallback(() => {
-    if (queue.length === 0) return;
-    // If past 4 seconds, restart current track
-    if (currentTime > 4) {
-      seekTo(0);
-      return;
-    }
-    const prevIndex = (currentQueueIndex - 1 + queue.length) % queue.length;
-    setCurrentQueueIndex(prevIndex);
-    const track = queue[prevIndex];
-    if (track) {
-      setCurrentTrack(track);
-      setIsPlaying(true);
-      setCurrentTime(0);
-      setDuration(track.durationSec || 210);
-      recordToHistory(track);
-    }
-  }, [queue, currentQueueIndex, currentTime, recordToHistory]);
+  }, [currentTrack, isPlaying, queue, recentlyPlayed, playTrack, pauseTrack, resumeTrack]);
 
   const seekTo = useCallback((seconds: number) => {
     setCurrentTime(seconds);
@@ -285,43 +528,72 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, [volume]);
 
+  // Queue manipulation
   const addToQueue = useCallback((track: YouTubeTrack) => {
     setQueue(prev => {
-      // Check if already in queue
-      if (prev.some(t => t.id === track.id)) return prev;
-      return [...prev, track];
+      // Append track to queue
+      const updated = [...prev, track];
+      queueRef.current = updated;
+      return updated;
     });
   }, []);
 
-  const removeFromQueue = useCallback(
-    (index: number) => {
-      setQueue(prev => {
-        const next = prev.filter((_, i) => i !== index);
-        if (index === currentQueueIndex && next.length > 0) {
-          const newIdx = Math.min(index, next.length - 1);
-          setCurrentQueueIndex(newIdx);
-          setCurrentTrack(next[newIdx]);
-        }
-        return next;
-      });
-    },
-    [currentQueueIndex]
-  );
+  const removeFromQueue = useCallback((index: number) => {
+    setQueue(prev => {
+      const updated = prev.filter((_, i) => i !== index);
+      queueRef.current = updated;
+      return updated;
+    });
+  }, []);
 
   const clearQueue = useCallback(() => {
-    setQueue(currentTrack ? [currentTrack] : []);
-    setCurrentQueueIndex(0);
-  }, [currentTrack]);
+    setQueue([]);
+    queueRef.current = [];
+  }, []);
 
   const reorderQueue = useCallback((startIndex: number, endIndex: number) => {
     setQueue(prev => {
       const result = Array.from(prev);
       const [removed] = result.splice(startIndex, 1);
       result.splice(endIndex, 0, removed);
+      queueRef.current = result;
       return result;
     });
   }, []);
 
+  // Settings & Modes
+  const toggleAutoplay = useCallback(() => {
+    setAutoplay(prev => {
+      const next = !prev;
+      autoplayRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const toggleRepeat = useCallback(() => {
+    setRepeatMode(prev => {
+      const modes: RepeatMode[] = ['off', 'one', 'all'];
+      const nextIdx = (modes.indexOf(prev) + 1) % modes.length;
+      const next = modes[nextIdx];
+      repeatModeRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const setPlaybackMode = useCallback((mode: PlaybackMode) => {
+    setPlaybackModeState(mode);
+    playbackModeRef.current = mode;
+  }, []);
+
+  const togglePlaybackMode = useCallback(() => {
+    setPlaybackModeState(prev => {
+      const next = prev === 'audio' ? 'video' : 'audio';
+      playbackModeRef.current = next;
+      return next;
+    });
+  }, []);
+
+  // View state controls
   const closeMiniPlayer = useCallback(() => {
     setIsMiniPlayerVisible(false);
     pauseTrack();
@@ -362,6 +634,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const clearRecentlyPlayed = useCallback(() => {
     setRecentlyPlayed([]);
+    recentlyPlayedRef.current = [];
   }, []);
 
   const syncProgress = useCallback((curr: number, dur: number) => {
@@ -371,20 +644,14 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
-  const handleTrackEnded = useCallback(() => {
-    if (queue.length > 0) {
-      nextTrack();
-    } else {
-      setIsPlaying(false);
-    }
-  }, [queue, nextTrack]);
-
   const handlePlayerPlay = useCallback(() => {
     setIsPlaying(true);
+    isPlayingRef.current = true;
   }, []);
 
   const handlePlayerPause = useCallback(() => {
     setIsPlaying(false);
+    isPlayingRef.current = false;
   }, []);
 
   return (
@@ -393,22 +660,28 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         currentTrack,
         isPlaying,
         queue,
-        currentQueueIndex,
+        currentQueueIndex: 0,
         currentTime,
         duration,
         volume,
         isMuted,
+        autoplay,
+        repeatMode,
+        playbackMode,
         isMiniPlayerVisible,
         isExpandedModalOpen,
         isQueueOpen,
         recentlyPlayed,
         favorites,
         playTrack,
-        togglePlay,
+        playNext,
+        playPrevious,
+        nextTrack: playNext,
+        previousTrack: playPrevious,
         pauseTrack,
         resumeTrack,
-        nextTrack,
-        previousTrack,
+        stopTrack,
+        togglePlay,
         seekTo,
         setVolume,
         toggleMute,
@@ -416,6 +689,10 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         removeFromQueue,
         clearQueue,
         reorderQueue,
+        toggleAutoplay,
+        toggleRepeat,
+        setPlaybackMode,
+        togglePlaybackMode,
         closeMiniPlayer,
         showMiniPlayer,
         openExpandedPlayer,

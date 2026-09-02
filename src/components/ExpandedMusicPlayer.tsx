@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useMusic } from '../context/MusicContext';
 import { CURATED_MUSIC_TRACKS } from '../services/youtubeService';
 import {
@@ -11,7 +11,6 @@ import {
   VolumeX,
   Heart,
   ListMusic,
-  Maximize2,
   Eye,
   Disc3
 } from 'lucide-react';
@@ -27,8 +26,8 @@ export const ExpandedMusicPlayer: React.FC = () => {
     isExpandedModalOpen,
     closeExpandedPlayer,
     togglePlay,
-    nextTrack,
-    previousTrack,
+    playNext,
+    playPrevious,
     seekTo,
     setVolume,
     toggleMute,
@@ -38,11 +37,10 @@ export const ExpandedMusicPlayer: React.FC = () => {
     playTrack
   } = useMusic();
 
-  const [activeTab, setActiveTab] = useState<'video' | 'details' | 'similar'>('video');
-
   if (!isExpandedModalOpen || !currentTrack) return null;
 
-  const fav = isFavorite(currentTrack.id);
+  const trackId = currentTrack.videoId || currentTrack.id;
+  const fav = isFavorite(trackId);
 
   // Format seconds to mm:ss
   const formatTime = (secs: number) => {
@@ -56,7 +54,9 @@ export const ExpandedMusicPlayer: React.FC = () => {
     seekTo(Number(e.target.value));
   };
 
-  const similarTracks = CURATED_MUSIC_TRACKS.filter(t => t.id !== currentTrack.id).slice(0, 6);
+  const similarTracks = CURATED_MUSIC_TRACKS.filter(
+    t => (t.videoId || t.id) !== trackId
+  ).slice(0, 6);
 
   return (
     <div
@@ -94,22 +94,17 @@ export const ExpandedMusicPlayer: React.FC = () => {
           </div>
         </div>
 
-        {/* Video / Tab Area */}
+        {/* Video / Content Area */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6">
-          {/* Main Official YouTube Embedded Iframe */}
-          <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black shadow-2xl border border-zinc-800">
-            <iframe
-              id="expanded-yt-iframe"
-              src={`https://www.youtube.com/embed/${currentTrack.id}?autoplay=${
-                isPlaying ? 1 : 0
-              }&enablejsapi=1&rel=0&modestbranding=1&origin=${encodeURIComponent(
-                window.location.origin
-              )}`}
-              title={currentTrack.title}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              className="w-full h-full border-0"
-            />
+          {/* Main YouTube Video Anchor: PersistentPlayerHost anchors over this exact rect */}
+          <div
+            id="expanded-video-anchor"
+            className="relative w-full aspect-video rounded-xl overflow-hidden bg-black shadow-2xl border border-zinc-800"
+          >
+            {/* Visual background placeholder before video positions */}
+            <div className="absolute inset-0 flex items-center justify-center bg-zinc-950">
+              <Disc3 className="w-12 h-12 text-zinc-700 animate-spin" />
+            </div>
           </div>
 
           {/* Scrubbing & Progress Timeline */}
@@ -134,7 +129,7 @@ export const ExpandedMusicPlayer: React.FC = () => {
               {/* Left: Track Info & Favorite */}
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => toggleFavorite(currentTrack.id)}
+                  onClick={() => toggleFavorite(trackId)}
                   className={`p-2 rounded-full border transition-all ${
                     fav
                       ? 'bg-[#E50914] border-[#E50914] text-white shadow-md'
@@ -153,7 +148,7 @@ export const ExpandedMusicPlayer: React.FC = () => {
               {/* Center: Main Controls */}
               <div className="flex items-center gap-4">
                 <button
-                  onClick={previousTrack}
+                  onClick={playPrevious}
                   className="p-2 text-zinc-300 hover:text-white transition-colors"
                   aria-label="Previous track"
                 >
@@ -173,7 +168,7 @@ export const ExpandedMusicPlayer: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={nextTrack}
+                  onClick={playNext}
                   className="p-2 text-zinc-300 hover:text-white transition-colors"
                   aria-label="Next track"
                 >
@@ -257,7 +252,7 @@ export const ExpandedMusicPlayer: React.FC = () => {
                     className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-zinc-800/80 cursor-pointer transition-colors group"
                   >
                     <img
-                      src={sim.thumbnailUrl}
+                      src={sim.thumbnailUrl || sim.thumbnail}
                       alt={sim.title}
                       className="w-10 h-10 rounded object-cover shrink-0"
                       referrerPolicy="no-referrer"

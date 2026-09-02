@@ -726,8 +726,8 @@ export class YouTubeService {
           return response;
         }
       } catch (err: any) {
-        if (err?.name === 'AbortError') {
-          throw err;
+        if (err?.name === 'AbortError' || signal?.aborted) {
+          return { tracks: [], totalResults: 0 };
         }
         console.warn('YouTube API live search fallback activated:', err);
       }

@@ -7,6 +7,7 @@ import { ToastContainer } from './Toast';
 import { MusicMiniPlayer } from './MusicMiniPlayer';
 import { ExpandedMusicPlayer } from './ExpandedMusicPlayer';
 import { QueueDrawer } from './QueueDrawer';
+import { PersistentPlayerHost } from './PersistentPlayerHost';
 
 export const AppLayout: React.FC = () => {
   return (
@@ -18,6 +19,9 @@ export const AppLayout: React.FC = () => {
       <main className="flex-grow">
         <Outlet />
       </main>
+
+      {/* Persistent Single YouTube Player Host */}
+      <PersistentPlayerHost />
 
       {/* Persistent YouTube Music Floating Mini-Player & Overlays */}
       <MusicMiniPlayer />
@@ -31,4 +35,3 @@ export const AppLayout: React.FC = () => {
     </div>
   );
 };
-

@@ -115,10 +115,13 @@ export type ActiveNavTab = 'home' | 'tv' | 'movies' | 'music' | 'new-popular' | 
 // ==========================================
 export interface YouTubeTrack {
   id: string; // YouTube Video ID (e.g. "dQw4w9WgXcQ")
+  videoId?: string; // Compatibility alias
+  queueId?: string; // Optional unique queue entry id
   title: string;
   artist: string; // Channel title or musical artist
   channelId?: string;
   thumbnailUrl: string;
+  thumbnail?: string; // Compatibility alias
   duration?: string; // Formatted e.g. "3:45"
   durationSec?: number; // Total seconds
   viewCount?: string; // e.g. "125M views"

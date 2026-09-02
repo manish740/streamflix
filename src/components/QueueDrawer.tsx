@@ -1,11 +1,10 @@
 import React from 'react';
 import { useMusic } from '../context/MusicContext';
-import { Play, Pause, Trash2, X, Music, Disc3 } from 'lucide-react';
+import { Play, Pause, Trash2, X, Music, Disc3, Repeat, Radio } from 'lucide-react';
 
 export const QueueDrawer: React.FC = () => {
   const {
     queue,
-    currentQueueIndex,
     currentTrack,
     isPlaying,
     isQueueOpen,
@@ -13,7 +12,11 @@ export const QueueDrawer: React.FC = () => {
     playTrack,
     togglePlay,
     removeFromQueue,
-    clearQueue
+    clearQueue,
+    autoplay,
+    toggleAutoplay,
+    repeatMode,
+    toggleRepeat
   } = useMusic();
 
   if (!isQueueOpen) return null;
@@ -40,7 +43,7 @@ export const QueueDrawer: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {queue.length > 1 && (
+            {queue.length > 0 && (
               <button
                 onClick={clearQueue}
                 className="text-xs text-zinc-400 hover:text-red-400 px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 transition-colors flex items-center gap-1.5"
@@ -60,12 +63,45 @@ export const QueueDrawer: React.FC = () => {
           </div>
         </div>
 
+        {/* Playback Settings: Autoplay & Repeat Mode */}
+        <div className="px-4 py-2.5 bg-zinc-950 border-b border-zinc-800/80 flex items-center justify-between text-xs">
+          {/* Autoplay setting */}
+          <button
+            onClick={toggleAutoplay}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${
+              autoplay
+                ? 'bg-[#E50914]/15 border-[#E50914]/50 text-[#E50914]'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300'
+            }`}
+            title={autoplay ? 'Autoplay ON: Continuous music when queue ends' : 'Autoplay OFF'}
+          >
+            <Radio className="w-3.5 h-3.5" />
+            <span className="font-medium">Autoplay: {autoplay ? 'ON' : 'OFF'}</span>
+          </button>
+
+          {/* Repeat mode setting */}
+          <button
+            onClick={toggleRepeat}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${
+              repeatMode !== 'off'
+                ? 'bg-[#E50914]/15 border-[#E50914]/50 text-[#E50914]'
+                : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300'
+            }`}
+            title={`Repeat: ${repeatMode.toUpperCase()}`}
+          >
+            <Repeat className="w-3.5 h-3.5" />
+            <span className="font-medium capitalize">
+              Repeat: {repeatMode === 'one' ? 'Track' : repeatMode === 'all' ? 'All' : 'Off'}
+            </span>
+          </button>
+        </div>
+
         {/* Now Playing Banner */}
         {currentTrack && (
           <div className="p-4 bg-gradient-to-r from-zinc-900 to-black border-b border-zinc-800/80 flex items-center gap-3">
             <div className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-zinc-700">
               <img
-                src={currentTrack.thumbnailUrl}
+                src={currentTrack.thumbnailUrl || currentTrack.thumbnail}
                 alt={currentTrack.title}
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
@@ -103,21 +139,22 @@ export const QueueDrawer: React.FC = () => {
               <Music className="w-12 h-12 mb-3 stroke-[1.5] text-zinc-600" />
               <p className="text-sm font-semibold text-zinc-300">Your queue is empty</p>
               <p className="text-xs text-zinc-500 mt-1 max-w-xs">
-                Explore Live Discovery to add songs, soundtracks, and trending tracks.
+                {autoplay
+                  ? 'Autoplay is active. Similar tracks will automatically play when current song ends.'
+                  : 'Add tracks from Music to build your custom playback queue.'}
               </p>
             </div>
           ) : (
             queue.map((track, idx) => {
-              const isCurrent = idx === currentQueueIndex;
               return (
                 <div
                   key={`${track.id}-${idx}`}
-                  onClick={() => playTrack(track)}
-                  className={`group py-2.5 px-3 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-all ${
-                    isCurrent
-                      ? 'bg-zinc-900 border border-[#E50914]/40 text-white'
-                      : 'hover:bg-zinc-900/60 text-zinc-300'
-                  }`}
+                  onClick={() => {
+                    // Clicking track plays it immediately and keeps subsequent songs in the queue
+                    const remaining = queue.slice(idx + 1);
+                    playTrack(track, remaining);
+                  }}
+                  className="group py-2.5 px-3 rounded-xl flex items-center justify-between gap-3 cursor-pointer transition-all hover:bg-zinc-900/60 text-zinc-300"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="text-xs font-mono font-bold w-4 text-center text-zinc-500">
@@ -125,18 +162,14 @@ export const QueueDrawer: React.FC = () => {
                     </span>
 
                     <img
-                      src={track.thumbnailUrl}
+                      src={track.thumbnailUrl || track.thumbnail}
                       alt={track.title}
                       className="w-10 h-10 rounded-md object-cover shrink-0 border border-zinc-800"
                       referrerPolicy="no-referrer"
                     />
 
                     <div className="min-w-0">
-                      <p
-                        className={`text-xs font-bold truncate ${
-                          isCurrent ? 'text-[#E50914]' : 'text-white group-hover:text-red-400'
-                        }`}
-                      >
+                      <p className="text-xs font-bold truncate text-white group-hover:text-red-400">
                         {track.title}
                       </p>
                       <p className="text-[11px] text-zinc-400 truncate">{track.artist}</p>

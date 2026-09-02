@@ -19,6 +19,7 @@ interface AuthContextType {
   logout: () => void;
   resetPassword: (email: string) => Promise<AuthResponse>;
   selectProfile: (profileId: string) => void;
+  switchProfile: (profileId: string) => void;
   addProfile: (name: string, avatar: string, isKids: boolean) => void;
   updateProfile: (profile: Partial<UserProfile>) => void;
   deleteProfile: (profileId: string) => void;
@@ -54,9 +55,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(parsed);
         setHasSelectedProfile(savedProfileChosen === 'true');
       } else {
-        // If first time visit or no user saved, start unauthenticated
-        setUser(null);
-        setHasSelectedProfile(false);
+        const isLoggedOut = localStorage.getItem('streamflix_logged_out') === 'true';
+        if (!isLoggedOut) {
+          // Initialize with default session so profile, watchlist, and history work out-of-the-box
+          setUser(DEFAULT_USER);
+          setHasSelectedProfile(true);
+        } else {
+          setUser(null);
+          setHasSelectedProfile(false);
+        }
       }
     } catch {
       setUser(null);
@@ -225,6 +232,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    localStorage.setItem('streamflix_logged_out', 'true');
     setUser(null);
     setHasSelectedProfile(false);
     localStorage.removeItem('streamflix_auth_user');
@@ -315,6 +323,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         resetPassword,
         selectProfile,
+        switchProfile: selectProfile,
         addProfile,
         updateProfile,
         deleteProfile,

@@ -26,6 +26,8 @@ import { SignupPage } from './pages/SignupPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
+import { ErrorBoundary } from './components/ErrorBoundary';
+
 const AppRoutes: React.FC = () => {
   const { isLoading } = useAuth();
 
@@ -66,22 +68,10 @@ const AppRoutes: React.FC = () => {
         <Route path="/" element={<HomePage />} />
         <Route path="/movies" element={<MoviesPage />} />
         <Route path="/tv-shows" element={<TvShowsPage />} />
-        <Route
-          path="/music"
-          element={
-            <ProtectedRoute>
-              <MusicPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/live-discovery"
-          element={
-            <ProtectedRoute>
-              <MusicPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/music" element={<MusicPage />} />
+        <Route path="/music/audio" element={<MusicPage />} />
+        <Route path="/music/video" element={<MusicPage />} />
+        <Route path="/live-discovery" element={<MusicPage />} />
         <Route path="/new-popular" element={<NewPopularPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/content/:contentId" element={<ContentDetailsPage />} />
@@ -129,14 +119,16 @@ const AppRoutes: React.FC = () => {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <WatchlistProvider>
-          <MusicProvider>
-            <AppRoutes />
-          </MusicProvider>
-        </WatchlistProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <WatchlistProvider>
+            <MusicProvider>
+              <AppRoutes />
+            </MusicProvider>
+          </WatchlistProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

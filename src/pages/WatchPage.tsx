@@ -177,17 +177,13 @@ export const WatchPage: React.FC = () => {
 
     // Periodically save progress (every 5 seconds)
     if (Math.floor(curr) % 5 === 0) {
-      saveProgress({
-        mediaId: media.id,
-        mediaType: media.type,
-        episodeId: currentEpisode?.id,
-        seasonNumber: currentEpisode?.seasonNumber,
-        episodeNumber: currentEpisode?.episodeNumber,
-        currentTime: Math.floor(curr),
-        duration: Math.floor(dur),
-        percent: Math.min(100, Math.round((curr / dur) * 100)),
-        updatedAt: new Date().toISOString()
-      });
+      saveProgress(
+        media.id,
+        Math.floor(curr),
+        Math.floor(dur),
+        media.type,
+        currentEpisode
+      );
     }
   };
 

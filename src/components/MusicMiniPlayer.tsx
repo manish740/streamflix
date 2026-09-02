@@ -1,6 +1,5 @@
 import React from 'react';
 import { useMusic } from '../context/MusicContext';
-import { YouTubePlayer } from './YouTubePlayer';
 import {
   Play,
   Pause,
@@ -11,7 +10,6 @@ import {
   Maximize2,
   X,
   ListMusic,
-  Disc3,
   Heart
 } from 'lucide-react';
 
@@ -26,37 +24,19 @@ export const MusicMiniPlayer: React.FC = () => {
     isMiniPlayerVisible,
     closeMiniPlayer,
     togglePlay,
-    nextTrack,
-    previousTrack,
+    playNext,
+    playPrevious,
     seekTo,
     setVolume,
     toggleMute,
     openExpandedPlayer,
     toggleQueue,
     toggleFavorite,
-    isFavorite,
-    playerRef,
-    syncProgress,
-    handleTrackEnded,
-    handlePlayerPlay,
-    handlePlayerPause
+    isFavorite
   } = useMusic();
 
   if (!isMiniPlayerVisible || !currentTrack) {
-    // Keep YouTube player container present if a track is active in background
-    return currentTrack ? (
-      <div className="hidden">
-        <YouTubePlayer
-          ref={playerRef}
-          videoId={currentTrack.id}
-          autoplay={isPlaying}
-          onPlay={handlePlayerPlay}
-          onPause={handlePlayerPause}
-          onEnded={handleTrackEnded}
-          onProgress={syncProgress}
-        />
-      </div>
-    ) : null;
+    return null;
   }
 
   const formatTime = (secs: number) => {
@@ -67,7 +47,8 @@ export const MusicMiniPlayer: React.FC = () => {
   };
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const fav = isFavorite(currentTrack.id);
+  const trackId = currentTrack.videoId || currentTrack.id;
+  const fav = isFavorite(trackId);
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -80,19 +61,6 @@ export const MusicMiniPlayer: React.FC = () => {
       id="music-mini-player"
       className="fixed bottom-0 left-0 right-0 z-40 bg-[#0c0c0c]/98 backdrop-blur-xl border-t border-zinc-800 shadow-2xl shadow-black transition-all duration-300 select-none animate-slide-up"
     >
-      {/* Offscreen / Mini background YouTube player */}
-      <div className="hidden">
-        <YouTubePlayer
-          ref={playerRef}
-          videoId={currentTrack.id}
-          autoplay={isPlaying}
-          onPlay={handlePlayerPlay}
-          onPause={handlePlayerPause}
-          onEnded={handleTrackEnded}
-          onProgress={syncProgress}
-        />
-      </div>
-
       {/* Top Scrub Timeline Bar */}
       <div
         onClick={handleSeek}
@@ -118,7 +86,7 @@ export const MusicMiniPlayer: React.FC = () => {
             title="Expand player"
           >
             <img
-              src={currentTrack.thumbnailUrl}
+              src={currentTrack.thumbnailUrl || currentTrack.thumbnail}
               alt={currentTrack.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform"
               referrerPolicy="no-referrer"
@@ -148,7 +116,7 @@ export const MusicMiniPlayer: React.FC = () => {
 
           {/* Favorite button */}
           <button
-            onClick={() => toggleFavorite(currentTrack.id)}
+            onClick={() => toggleFavorite(trackId)}
             className={`hidden md:block p-1.5 rounded-full transition-colors ${
               fav ? 'text-[#E50914]' : 'text-zinc-500 hover:text-white'
             }`}
@@ -164,7 +132,7 @@ export const MusicMiniPlayer: React.FC = () => {
           <div className="flex items-center gap-2 sm:gap-4">
             <button
               id="mini-prev-btn"
-              onClick={previousTrack}
+              onClick={playPrevious}
               className="text-zinc-400 hover:text-white p-1 transition-colors"
               aria-label="Previous Track"
               title="Previous Track"
@@ -188,7 +156,7 @@ export const MusicMiniPlayer: React.FC = () => {
 
             <button
               id="mini-next-btn"
-              onClick={nextTrack}
+              onClick={playNext}
               className="text-zinc-400 hover:text-white p-1 transition-colors"
               aria-label="Next Track"
               title="Next Track"
