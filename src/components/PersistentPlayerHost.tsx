@@ -119,9 +119,8 @@ export const PersistentPlayerHost: React.FC = () => {
     };
   }, [location.pathname, isExpandedModalOpen]);
 
-  if (!currentTrack) return null;
-
-  const trackId = currentTrack.videoId || currentTrack.id;
+  // Persistent Player Host stays mounted so that there is exactly ONE stable YouTube player container.
+  const trackId = currentTrack ? (currentTrack.videoId || currentTrack.id) : '';
 
   // Mobile-friendly positioning: when no visible anchor exists (e.g. audio mode or background route),
   // keep iframe inside viewport with minimal opacity and dimensions so mobile browser does not throttle or suspend playback.

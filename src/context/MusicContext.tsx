@@ -384,25 +384,11 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [stopActivePlayer, recordToHistory]
   );
 
-  // Switch between audio and video modes while preserving position
+  // Switch between audio and video modes while preserving continuous playback
   const switchMode = useCallback((newMode: 'audio' | 'video') => {
-    const current = currentTrackRef.current;
-    const currentPos = currentTimeRef.current;
-    const trackId = current?.videoId || current?.id;
+    console.log(`[PLAYER] Switch mode: ${activePlayerRef.current} -> ${newMode}`);
 
-    console.log(`[MOBILE PLAYER] Switch mode: ${activePlayerRef.current} -> ${newMode} at ${currentPos}s`);
-
-    // 1. Pause current player
-    if (playerRef.current) {
-      playerRef.current.pause();
-    }
-    setIsPlaying(false);
-    isPlayingRef.current = false;
-
-    // 2. Save current position
-    savedPositionRef.current = currentPos;
-
-    // 3. Update active player and playback mode
+    // Update presentation mode without destroying or reloading the single player
     setActivePlayerState(newMode);
     activePlayerRef.current = newMode;
     setPlaybackModeState(newMode);
@@ -410,13 +396,6 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setAutoplayBlocked(false);
     autoplayBlockedRef.current = false;
     setPlaybackError(null);
-
-    // 4. Seek to saved position & load with autoplay
-    if (trackId && playerRef.current) {
-      setIsPlaying(true);
-      isPlayingRef.current = true;
-      playerRef.current.loadVideo(trackId, true, currentPos);
-    }
   }, []);
 
   // Explicit user-initiated retry playback (for "Tap to Play" or resume after block)

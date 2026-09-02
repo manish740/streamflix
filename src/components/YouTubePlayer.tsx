@@ -111,8 +111,15 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
     },
     ref
   ) => {
-    const containerId = useRef(`yt-player-${Math.random().toString(36).substring(2, 9)}`);
-    const playerInstanceRef = useRef<YTPlayer | null>(null);
+    // id="v9x8j2" container ref
+    const playerContainerRef = useRef<HTMLDivElement | null>(null);
+    // Player ref storing active YT.Player instance
+    // id="lq9q8f"
+    const playerRef = useRef<YTPlayer | null>(null);
+    // id="v7j3k9"
+    const initializingRef = useRef(false);
+    const mountedRef = useRef(true);
+
     const isPlayerReadyRef = useRef<boolean>(false);
     const currentVideoIdRef = useRef<string>(videoId);
     const pendingLoadRef = useRef<{ videoId: string; autoplay: boolean; startSeconds?: number } | null>(null);
@@ -154,10 +161,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
     const startProgressInterval = useCallback(() => {
       clearProgressInterval();
       progressIntervalRef.current = setInterval(() => {
-        if (playerInstanceRef.current) {
+        if (playerRef.current) {
           try {
-            const current = playerInstanceRef.current.getCurrentTime() || 0;
-            const dur = playerInstanceRef.current.getDuration() || 0;
+            const current = playerRef.current.getCurrentTime() || 0;
+            const dur = playerRef.current.getDuration() || 0;
             if (onProgressRef.current) {
               onProgressRef.current(current, dur);
             }
@@ -171,22 +178,24 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
     // Central loadVideo method
     const loadVideo = useCallback((newVideoId: string, shouldAutoplay = true, startSeconds = 0) => {
       if (!newVideoId) return;
+      // id="h8j4m2"
+      console.log("CURRENT VIDEO:", newVideoId);
       currentVideoIdRef.current = newVideoId;
 
-      if (playerInstanceRef.current && isPlayerReadyRef.current) {
+      if (playerRef.current && isPlayerReadyRef.current) {
         try {
           setIsLoading(true);
           console.log('PLAY REQUESTED', { videoId: newVideoId, shouldAutoplay, startSeconds });
           if (shouldAutoplay) {
-            playerInstanceRef.current.loadVideoById(newVideoId, startSeconds);
-            playerInstanceRef.current.seekTo(startSeconds, true);
-            playerInstanceRef.current.playVideo();
+            playerRef.current.loadVideoById(newVideoId, startSeconds);
+            playerRef.current.seekTo(startSeconds, true);
+            playerRef.current.playVideo();
 
             // Mobile autoplay detection: if not playing or buffering after delay, notify blocked
             setTimeout(() => {
-              if (playerInstanceRef.current) {
+              if (playerRef.current) {
                 try {
-                  const state = playerInstanceRef.current.getPlayerState?.();
+                  const state = playerRef.current.getPlayerState?.();
                   if (state === 2 || state === 5 || state === -1) {
                     console.log('PLAY BLOCKED');
                     setIsLoading(false);
@@ -198,7 +207,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
               }
             }, 1200);
           } else {
-            playerInstanceRef.current.cueVideoById(newVideoId, startSeconds);
+            playerRef.current.cueVideoById(newVideoId, startSeconds);
           }
         } catch (err) {
           console.warn('loadVideoById caught error:', err);
@@ -211,64 +220,64 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
     // Expose methods via ref
     useImperativeHandle(ref, () => ({
       play: () => {
-        if (playerInstanceRef.current) {
+        if (playerRef.current) {
           try {
             console.log('PLAY REQUESTED');
-            playerInstanceRef.current.playVideo();
+            playerRef.current.playVideo();
           } catch (err) {
             console.warn('playVideo failed:', err);
           }
         }
       },
       pause: () => {
-        if (playerInstanceRef.current) {
+        if (playerRef.current) {
           try {
-            playerInstanceRef.current.pauseVideo();
+            playerRef.current.pauseVideo();
           } catch (err) {
             console.warn('pauseVideo failed:', err);
           }
         }
       },
       stop: () => {
-        if (playerInstanceRef.current) {
+        if (playerRef.current) {
           try {
-            playerInstanceRef.current.stopVideo();
+            playerRef.current.stopVideo();
           } catch (err) {
             console.warn('stopVideo failed:', err);
           }
         }
       },
       seekTo: (seconds: number) => {
-        if (playerInstanceRef.current) {
+        if (playerRef.current) {
           try {
-            playerInstanceRef.current.seekTo(seconds, true);
+            playerRef.current.seekTo(seconds, true);
           } catch (err) {
             console.warn('seekTo failed:', err);
           }
         }
       },
       setVolume: (vol: number) => {
-        if (playerInstanceRef.current) {
+        if (playerRef.current) {
           try {
-            playerInstanceRef.current.setVolume(vol);
+            playerRef.current.setVolume(vol);
           } catch (err) {
             console.warn('setVolume failed:', err);
           }
         }
       },
       mute: () => {
-        if (playerInstanceRef.current) {
+        if (playerRef.current) {
           try {
-            playerInstanceRef.current.mute();
+            playerRef.current.mute();
           } catch (err) {
             console.warn('mute failed:', err);
           }
         }
       },
       unMute: () => {
-        if (playerInstanceRef.current) {
+        if (playerRef.current) {
           try {
-            playerInstanceRef.current.unMute();
+            playerRef.current.unMute();
           } catch (err) {
             console.warn('unMute failed:', err);
           }
@@ -276,26 +285,26 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
       },
       getCurrentTime: () => {
         try {
-          return playerInstanceRef.current?.getCurrentTime() || 0;
+          return playerRef.current?.getCurrentTime() || 0;
         } catch {
           return 0;
         }
       },
       getDuration: () => {
         try {
-          return playerInstanceRef.current?.getDuration() || 0;
+          return playerRef.current?.getDuration() || 0;
         } catch {
           return 0;
         }
       },
       getPlayerState: () => {
         try {
-          return playerInstanceRef.current?.getPlayerState?.() ?? -1;
+          return playerRef.current?.getPlayerState?.() ?? -1;
         } catch {
           return -1;
         }
       },
-      getPlayer: () => playerInstanceRef.current,
+      getPlayer: () => playerRef.current,
       loadVideo,
       isReady: () => isPlayerReadyRef.current
     }));
@@ -320,8 +329,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
         tag.onerror = () => {
           console.warn('Failed to load YouTube IFrame API script');
         };
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
+        // Safely append to document.head, avoiding insertBefore on dynamic script tags
+        document.head.appendChild(tag);
       }
 
       const pollTimer = setInterval(() => {
@@ -347,22 +356,30 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
       };
     }, []);
 
-    // Step 2: Initialize YouTube Player once API is ready
+    // Step 2: Initialize YouTube Player ONCE when API is ready and container is mounted
     useEffect(() => {
-      if (!isApiReady || !videoId) return;
-
-      const element = document.getElementById(containerId.current);
-      if (!element) return;
-
-      // If player already exists (ready or pending), do NOT instantiate a second YT.Player on same container
-      if (playerInstanceRef.current) {
-        if (currentVideoIdRef.current !== videoId) {
-          loadVideo(videoId, autoplay);
-        }
+      if (!isApiReady) return;
+      if (!playerContainerRef.current) return;
+      if (!mountedRef.current) return;
+      // id="f3m8tq"
+      if (playerRef.current) {
         return;
       }
+      if (initializingRef.current) return;
 
-      setIsLoading(true);
+      const container = playerContainerRef.current;
+      initializingRef.current = true;
+      // id="h8j4m2"
+      console.log("PLAYER INIT");
+
+      // Prepare an isolated placeholder slot inside container that YouTube replaces
+      let slot = container.querySelector('.yt-player-slot') as HTMLElement | null;
+      if (!slot) {
+        container.innerHTML = '';
+        slot = document.createElement('div');
+        slot.className = 'yt-player-slot w-full h-full';
+        container.appendChild(slot);
+      }
 
       const safeOrigin =
         typeof window !== 'undefined' &&
@@ -371,10 +388,11 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
           ? window.location.origin
           : undefined;
 
+      const initVideoId = currentVideoIdRef.current || videoId || '';
+
       try {
-        console.log('PLAYER CREATED', { videoId, containerId: containerId.current });
-        const player = new window.YT.Player(containerId.current, {
-          videoId,
+        const player = new window.YT.Player(slot, {
+          videoId: initVideoId || undefined,
           playerVars: {
             autoplay: autoplay ? 1 : 0,
             controls: controls ? 1 : 0,
@@ -387,10 +405,22 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
           },
           events: {
             onReady: (event: YTPlayerEvent) => {
-              console.log('PLAYER READY', { videoId });
-              playerInstanceRef.current = event.target;
+              if (!mountedRef.current) {
+                try {
+                  event.target.destroy();
+                } catch {}
+                return;
+              }
+              // id="h8j4m2"
+              console.log("PLAYER READY");
+              playerRef.current = event.target;
               isPlayerReadyRef.current = true;
+              initializingRef.current = false;
               setIsLoading(false);
+
+              // id="h8j4m2"
+              console.log("PLAYER INSTANCE:", playerRef.current);
+              console.log("CURRENT VIDEO:", currentVideoIdRef.current);
 
               if (pendingLoadRef.current) {
                 const { videoId: pId, autoplay: pAutoplay, startSeconds: pStart } = pendingLoadRef.current;
@@ -421,9 +451,9 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
                 } catch (e) {
                   console.warn('Failed executing pending load:', e);
                 }
-              } else if (autoplayRef.current) {
+              } else if (autoplayRef.current && initVideoId) {
                 try {
-                  console.log('PLAY REQUESTED', { videoId });
+                  console.log('PLAY REQUESTED', { videoId: initVideoId });
                   event.target.seekTo(0, true);
                   event.target.playVideo();
                   setTimeout(() => {
@@ -453,6 +483,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
               }
             },
             onStateChange: (event: YTPlayerStateChangeEvent) => {
+              if (!mountedRef.current) return;
               const state = event.data;
               console.log('PLAYER STATE', state);
 
@@ -471,6 +502,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
               }
               // 2 = PAUSED
               else if (state === 2 || (window.YT?.PlayerState && state === window.YT.PlayerState.PAUSED)) {
+                console.log('PLAY PAUSED');
                 clearProgressInterval();
                 if (onPauseRef.current) {
                   try {
@@ -507,6 +539,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
               }
             },
             onError: (event: YTPlayerErrorEvent) => {
+              if (!mountedRef.current) return;
               console.warn('YouTube Player error code:', event.data);
               setIsLoading(false);
               clearProgressInterval();
@@ -530,46 +563,80 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
             }
           }
         });
-
-        playerInstanceRef.current = player;
       } catch (err) {
         console.warn('Failed to construct YouTube player:', err);
+        initializingRef.current = false;
         setIsLoading(false);
       }
+    }, [isApiReady, controls, playlist, startProgressInterval, clearProgressInterval]);
 
-      return () => {
-        clearProgressInterval();
-      };
-    }, [isApiReady, videoId, autoplay, controls, playlist, loadVideo, clearProgressInterval, startProgressInterval]);
+    // Step 3: Handle track changes on existing player instance
+    useEffect(() => {
+      if (!videoId) return;
+      if (videoId === currentVideoIdRef.current) return;
+
+      // id="h8j4m2"
+      console.log("CURRENT VIDEO:", videoId);
+      currentVideoIdRef.current = videoId;
+
+      if (playerRef.current && isPlayerReadyRef.current) {
+        try {
+          setIsLoading(true);
+          console.log('PLAY REQUESTED', { videoId, autoplay });
+          if (autoplay) {
+            playerRef.current.loadVideoById(videoId, 0);
+            playerRef.current.seekTo(0, true);
+            playerRef.current.playVideo();
+          } else {
+            playerRef.current.cueVideoById(videoId, 0);
+          }
+        } catch (err) {
+          console.warn('loadVideoById caught error:', err);
+        }
+      } else {
+        pendingLoadRef.current = { videoId, autoplay, startSeconds: 0 };
+      }
+    }, [videoId, autoplay]);
 
     // Clean up on component unmount
     useEffect(() => {
       return () => {
-        console.log('PLAYER DESTROYED');
+        mountedRef.current = false;
         clearProgressInterval();
-        if (playerInstanceRef.current) {
+        // id="h8j4m2"
+        console.log("PLAYER DESTROY");
+        // id="r1p8v7"
+        if (playerRef.current) {
           try {
-            playerInstanceRef.current.destroy();
-          } catch {
-            // Ignore
+            playerRef.current.destroy();
+          } catch (error) {
+            console.warn("Player cleanup failed", error);
           }
-          playerInstanceRef.current = null;
-          isPlayerReadyRef.current = false;
+          playerRef.current = null;
         }
+        initializingRef.current = false;
+        isPlayerReadyRef.current = false;
       };
     }, [clearProgressInterval]);
 
     return (
       <div className={`relative overflow-hidden bg-black rounded-xl ${className}`}>
+        {/* Dedicated YouTube Player container: React owns the element, YouTube creates iframe inside it */}
+        <div
+          id="v9x8j2"
+          ref={playerContainerRef}
+          className="w-full h-full aspect-video"
+        />
+
+        {/* Loading overlay */}
         {isLoading && (
-          <div className="absolute inset-0 bg-zinc-950 flex flex-col items-center justify-center z-10">
+          <div className="absolute inset-0 bg-zinc-950 flex flex-col items-center justify-center z-10 pointer-events-none">
             <div className="w-10 h-10 border-3 border-[#E50914] border-t-transparent rounded-full animate-spin mb-2" />
             <span className="text-xs text-zinc-400 font-mono tracking-wider">
               Loading YouTube Media...
             </span>
           </div>
         )}
-        <div id={containerId.current} className="w-full h-full aspect-video" />
       </div>
     );
   }
